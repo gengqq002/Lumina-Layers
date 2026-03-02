@@ -100,7 +100,7 @@ class ColorSystem:
             2: [236, 0, 140, 255],    # Magenta
             3: [0, 174, 66, 255],     # Green
             4: [244, 238, 42, 255],   # Yellow
-            5: [20, 20, 20, 255]      # Black
+            5: [0, 0, 0, 255]         # Black (纯黑 #000000)
         },
         'map': {"White": 0, "Cyan": 1, "Magenta": 2, "Green": 3, "Yellow": 4, "Black": 5},
         'corner_labels': ["白色 (左上)", "青色 (右上)", "品红 (右下)", "黄色 (左下)"],
@@ -112,7 +112,7 @@ class ColorSystem:
         'slots': ['Slot 1 (White)', 'Slot 2 (Cyan)', 'Slot 3 (Magenta)', 'Slot 4 (Yellow)', 'Slot 5 (Black)', 'Slot 6 (Red)', 'Slot 7 (Deep Blue)', 'Slot 8 (Green)'],
         'preview': {
             0: [255, 255, 255, 255], 1: [0, 134, 214, 255], 2: [236, 0, 140, 255], 3: [244, 238, 42, 255],
-            4: [20, 20, 20, 255], 5: [193, 46, 31, 255], 6: [10, 41, 137, 255], 7: [0, 174, 66, 255]
+            4: [0, 0, 0, 255], 5: [193, 46, 31, 255], 6: [10, 41, 137, 255], 7: [0, 174, 66, 255]
         },
         'map': {'White': 0, 'Cyan': 1, 'Magenta': 2, 'Yellow': 3, 'Black': 4, 'Red': 5, 'Deep Blue': 6, 'Green': 7},
         'corner_labels': ['TL', 'TR', 'BR', 'BL']
@@ -125,7 +125,7 @@ class ColorSystem:
         'slots': ["White", "Black"],
         'preview': {
             0: [255, 255, 255, 255],  # White
-            1: [20, 20, 20, 255]      # Black
+            1: [0, 0, 0, 255]         # Black (纯黑 #000000)
         },
         'map': {"White": 0, "Black": 1},
         'corner_labels': ["白色 (左上)", "黑色 (右上)", "黑色 (右下)", "黑色 (左下)"],

@@ -14,7 +14,8 @@ import gradio as gr
 from typing import List, Dict, Tuple, Optional
 
 from config import PrinterConfig, ColorSystem, ModelingMode, PREVIEW_SCALE, PREVIEW_MARGIN, OUTPUT_DIR, BedManager
-from utils import Stats, safe_fix_3mf_names
+from utils import Stats
+from utils.bambu_3mf_writer import export_scene_with_bambu_metadata
 
 from core.image_processing import LuminaImageProcessor
 from core.mesh_generators import get_mesher
@@ -1166,9 +1167,38 @@ def convert_image_to_3d(image_path, lut_path, target_width_mm, spacer_thick,
         return None, None, None, "❌ Mesh generation failed: No valid meshes generated"
     
     try:
-        scene.export(out_path)
-        safe_fix_3mf_names(out_path, valid_slot_names)
-        print(f"[CONVERTER] 3MF exported: {out_path}")
+        # Use enhanced BambuStudio-compatible 3MF export
+        print(f"[CONVERTER] Exporting with BambuStudio metadata...")
+        
+        # Prepare print settings (matching user's sample file for color layering)
+        print_settings = {
+            'layer_height': '0.08',
+            'initial_layer_height': '0.08',
+            'wall_loops': '1',
+            'top_shell_layers': '0',
+            'bottom_shell_layers': '0',
+            'sparse_infill_density': '100%',
+            'sparse_infill_pattern': 'zig-zag',
+            'nozzle_temperature': ['220'] * 8,  # Support up to 8 extruders
+            'bed_temperature': ['60'] * 8,
+            'filament_type': ['PLA'] * 8,
+            'print_speed': '100',
+            'travel_speed': '150',
+            'enable_support': '0',
+            'brim_width': '5',
+            'brim_type': 'auto_brim',
+        }
+        
+        export_scene_with_bambu_metadata(
+            scene=scene,
+            output_path=out_path,
+            slot_names=valid_slot_names,
+            preview_colors=preview_colors,
+            settings=print_settings,
+            color_mode=color_mode
+        )
+        
+        print(f"[CONVERTER] 3MF exported with embedded settings: {out_path}")
     except Exception as e:
         print(f"[CONVERTER] Error exporting 3MF: {e}")
         return None, None, None, f"❌ 3MF export failed: {e}"
@@ -2834,9 +2864,10 @@ def update_preview_with_replacements(cache, replacement_regions=None,
                                      loop_pos=None, add_loop=False,
                                      loop_width=4, loop_length=8,
                                      loop_hole=2.5, loop_angle=0,
+                                     merge_map: dict = None,
                                      lang: str = "zh"):
     """
-    Update preview image with color replacements applied.
+    Update preview image with color replacements and optional color merging applied.
     
     This function applies color replacements to the cached preview data
     without re-processing the entire image. It's designed for fast
@@ -2852,6 +2883,9 @@ def update_preview_with_replacements(cache, replacement_regions=None,
         loop_length: Loop length in mm
         loop_hole: Loop hole diameter in mm
         loop_angle: Loop rotation angle in degrees
+        merge_map: Optional dict mapping source hex to target hex colors for merging
+                  (applied before color_replacements)
+        lang: Language code
     
     Returns:
         tuple: (display_image, updated_cache, palette_html)
@@ -2865,8 +2899,16 @@ def update_preview_with_replacements(cache, replacement_regions=None,
     color_conf = cache['color_conf']
     backing_color_id = cache.get('backing_color_id', 0)  # Handle old cache versions
     target_h, target_w = original_rgb.shape[:2]
-
+    # Start with original RGB
     matched_rgb = original_rgb.copy()
+
+    # Apply merge map first (if provided)
+    if merge_map:
+        from core.color_merger import ColorMerger
+        from core.image_processing import LuminaImageProcessor
+
+        merger = ColorMerger(LuminaImageProcessor._rgb_to_lab)
+        matched_rgb = merger.apply_color_merging(matched_rgb, merge_map)
 
     # Apply region replacements in-order (later items override earlier items)
     for item in (replacement_regions or []):

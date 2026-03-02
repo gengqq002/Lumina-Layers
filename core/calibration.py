@@ -19,7 +19,8 @@ from colormath.color_diff import delta_e_cie2000
 
 from config import PrinterConfig, ColorSystem, SmartConfig, OUTPUT_DIR
 from core.naming import generate_calibration_filename
-from utils import Stats, safe_fix_3mf_names
+from utils import Stats
+from utils.bambu_3mf_writer import export_scene_with_bambu_metadata
 
 
 def _generate_voxel_mesh(voxel_matrix: np.ndarray, material_index: int,
@@ -166,11 +167,25 @@ def generate_calibration_board(color_mode: str, block_size_mm: float,
             mesh.metadata['name'] = name
             scene.add_geometry(mesh, node_name=name, geom_name=name)
 
-    # Export
+    # Export with BambuStudio metadata
     output_path = os.path.join(OUTPUT_DIR, generate_calibration_filename(color_mode, "Standard"))
-    scene.export(output_path)
-
-    safe_fix_3mf_names(output_path, slot_names)
+    
+    export_scene_with_bambu_metadata(
+        scene=scene,
+        output_path=output_path,
+        slot_names=slot_names,
+        preview_colors=preview_colors,
+        settings={
+            'layer_height': '0.08',
+            'initial_layer_height': '0.08',
+            'wall_loops': '1',
+            'top_shell_layers': '0',
+            'bottom_shell_layers': '0',
+            'sparse_infill_density': '100%',
+            'sparse_infill_pattern': 'zig-zag',
+        },
+        color_mode=color_mode
+    )
 
     # Generate preview
     bottom_layer = full_matrix[0].astype(np.uint8)
