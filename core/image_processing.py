@@ -4,6 +4,8 @@ Lumina Studio - Image Processing Core
 Handles image loading, preprocessing, color quantization and matching.
 """
 
+import os
+import sys
 import numpy as np
 import cv2
 from PIL import Image
@@ -27,7 +29,28 @@ class LuminaImageProcessor:
     
     Handles LUT loading, image processing, and color matching.
     """
-    
+
+    @staticmethod
+    def _rgb_to_lab(rgb_array):
+        """将 RGB 数组转换为 CIELAB 空间（感知均匀色彩空间）。
+
+        Args:
+            rgb_array: numpy array, shape (N, 3) 或 (H, W, 3), dtype uint8
+
+        Returns:
+            numpy array, 同 shape, dtype float64, Lab 值
+        """
+        original_shape = rgb_array.shape
+        if rgb_array.ndim == 2:
+            rgb_3d = rgb_array.reshape(1, -1, 3).astype(np.uint8)
+        else:
+            rgb_3d = rgb_array.astype(np.uint8)
+        bgr = cv2.cvtColor(rgb_3d, cv2.COLOR_RGB2BGR)
+        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2Lab).astype(np.float64)
+        if len(original_shape) == 2:
+            return lab.reshape(original_shape)
+        return lab
+
     def __init__(self, lut_path, color_mode):
         """
         Initialize image processor.
@@ -38,8 +61,10 @@ class LuminaImageProcessor:
         """
         self.color_mode = color_mode
         self.lut_rgb = None
+        self.lut_lab = None  # CIELAB 空间的 LUT 颜色（用于 KDTree 匹配）
         self.ref_stacks = None
         self.kdtree = None
+        self.enable_cleanup = True  # 默认开启孤立像素清理
         
         self._load_lut(lut_path)
     
@@ -152,13 +177,29 @@ class LuminaImageProcessor:
     
     def _load_lut(self, lut_path):
         """
-        Load and validate LUT file (Supports 4-Color, 6-Color, and 8-Color).
+        Load and validate LUT file (Supports 2-Color, 4-Color, 6-Color, 8-Color, and Merged).
         
         Automatically detects LUT type based on size:
+        - .npz files: Merged LUT (contains rgb + stacks arrays)
+        - 32 colors: 2-Color BW (Black & White)
         - 1024 colors: 4-Color Standard (CMYW/RYBW)
         - 1296 colors: 6-Color Smart 1296
         - 2738 colors: 8-Color Max
+        - Other sizes: Merged LUT (try .npz companion file)
         """
+        # 合并 LUT 支持：.npz 格式直接加载 rgb + stacks
+        if lut_path.endswith('.npz'):
+            try:
+                data = np.load(lut_path)
+                self.lut_rgb = data['rgb']
+                self.ref_stacks = data['stacks']
+                self.lut_lab = self._rgb_to_lab(self.lut_rgb)
+                self.kdtree = KDTree(self.lut_lab)
+                print(f"✅ Merged LUT loaded: {len(self.lut_rgb)} colors (.npz format, Lab KDTree)")
+                return
+            except Exception as e:
+                raise ValueError(f"❌ Merged LUT file corrupted: {e}")
+
         try:
             lut_grid = np.load(lut_path)
             measured_colors = lut_grid.reshape(-1, 3)
@@ -171,18 +212,50 @@ class LuminaImageProcessor:
         
         print(f"[IMAGE_PROCESSOR] Loading LUT with {total_colors} points...")
         
+        # Branch 0: 2-Color BW (32)
+        if self.color_mode == "BW (Black & White)" or self.color_mode == "BW" or total_colors == 32:
+            print("[IMAGE_PROCESSOR] Detected 2-Color BW mode")
+            
+            # Generate all 32 combinations (2^5 = 32)
+            for i in range(32):
+                if i >= total_colors:
+                    break
+                
+                # Rebuild 2-base stacking (0..31)
+                digits = []
+                temp = i
+                for _ in range(5):
+                    digits.append(temp % 2)
+                    temp //= 2
+                stack = digits[::-1]  # [顶...底] format
+                
+                valid_rgb.append(measured_colors[i])
+                valid_stacks.append(stack)
+            
+            self.lut_rgb = np.array(valid_rgb)
+            self.ref_stacks = np.array(valid_stacks)
+            
+            print(f"✅ LUT loaded: {len(self.lut_rgb)} colors (2-Color BW mode)")
+        
         # Branch 1: 8-Color Max (2738)
-        if "8-Color" in self.color_mode or total_colors == 2738:
+        elif "8-Color" in self.color_mode or total_colors == 2738:
             print("[IMAGE_PROCESSOR] Detected 8-Color Max mode")
             
             # Load pre-generated 8-color stacks
-            smart_stacks = np.load('assets/smart_8color_stacks.npy').tolist()
+            import sys
+            if getattr(sys, 'frozen', False):
+                # Running as compiled executable
+                stacks_path = os.path.join(sys._MEIPASS, 'assets', 'smart_8color_stacks.npy')
+            else:
+                # Running as script
+                stacks_path = 'assets/smart_8color_stacks.npy'
             
-            # Reverse stacking order for Face-Down printing
-            # Original smart_stacks is [Bottom, ..., Top] (simulation data order)
-            # Converter expects [Top, ..., Bottom] so Z=0 is the viewing surface
+            smart_stacks = np.load(stacks_path).tolist()
+            
+            # 约定转换：smart_8color_stacks.npy 存储底到顶约定（stack[0]=背面），
+            # 转换为顶到底约定（stack[0]=观赏面, stack[4]=背面），与 4 色模式统一
             smart_stacks = [tuple(reversed(s)) for s in smart_stacks]
-            print("[IMAGE_PROCESSOR] Stacks reversed for Face-Down printing compatibility.")
+            print("[IMAGE_PROCESSOR] Stacks converted from bottom-to-top to top-to-bottom convention (matching 4-color mode).")
             
             if len(smart_stacks) != total_colors:
                 print(f"⚠️ Warning: Stacks count ({len(smart_stacks)}) != LUT count ({total_colors})")
@@ -201,19 +274,11 @@ class LuminaImageProcessor:
             
             from core.calibration import get_top_1296_colors
             
-            # Retrieve 1296 intelligent stacking order (must match calibration.py logic)
-            # Note: generate_smart_board uses padding to fill 38x38,
-            # but extractor extracts the border-removed 36x36 (1296 cells).
-            # So we directly get the original stacking data here.
-            
             smart_stacks = get_top_1296_colors()
-            
-            # Reverse stacking order to make it (Top -> Bottom)
-            # Original smart_stacks is [Bottom, ..., Top] (simulation data order)
-            # But Converter's Face Down logic prints Z=0 as Index=0
-            # So we need to reverse to [Top, ..., Bottom], making Z=0 the viewing surface
+            # 约定转换：get_top_1296_colors() 返回底到顶约定（stack[0]=背面），
+            # 转换为顶到底约定（stack[0]=观赏面, stack[4]=背面），与 4 色模式统一
             smart_stacks = [tuple(reversed(s)) for s in smart_stacks]
-            print("[IMAGE_PROCESSOR] Stacks reversed for Face-Down printing compatibility.")
+            print("[IMAGE_PROCESSOR] Stacks converted from bottom-to-top to top-to-bottom convention (matching 4-color mode).")
             
             if len(smart_stacks) != total_colors:
                 print(f"⚠️ Warning: Stacks count ({len(smart_stacks)}) != LUT count ({total_colors})")
@@ -221,13 +286,38 @@ class LuminaImageProcessor:
                 smart_stacks = smart_stacks[:min_len]
                 measured_colors = measured_colors[:min_len]
             
-            # No "Base Blue" filtering in 6-color mode (colors too complex)
             self.lut_rgb = measured_colors
             self.ref_stacks = np.array(smart_stacks)
             
             print(f"✅ LUT loaded: {len(self.lut_rgb)} colors (6-Color mode)")
         
-        # Branch 3: 4-Color Standard (1024)
+        # Branch 3: Merged LUT (non-standard size or "Merged" mode)
+        elif self.color_mode == "Merged" or total_colors not in (32, 1024, 1296, 2738):
+            print(f"[IMAGE_PROCESSOR] Detected non-standard LUT size ({total_colors}), trying companion .npz...")
+            
+            # 尝试查找同名 .npz 文件
+            npz_path = lut_path.rsplit('.', 1)[0] + '.npz'
+            if os.path.exists(npz_path):
+                try:
+                    data = np.load(npz_path)
+                    self.lut_rgb = data['rgb']
+                    self.ref_stacks = data['stacks']
+                    self.lut_lab = self._rgb_to_lab(self.lut_rgb)
+                    self.kdtree = KDTree(self.lut_lab)
+                    print(f"✅ Merged LUT loaded from companion .npz: {len(self.lut_rgb)} colors (Lab KDTree)")
+                    return
+                except Exception as e:
+                    print(f"⚠️ Failed to load companion .npz: {e}")
+            
+            # 无 .npz 伴随文件，使用 RGB 数据但无堆叠信息
+            # 生成占位堆叠（全0）
+            print(f"⚠️ No companion .npz found, using placeholder stacks")
+            self.lut_rgb = measured_colors
+            self.ref_stacks = np.zeros((total_colors, 5), dtype=np.int32)
+            
+            print(f"✅ LUT loaded: {len(self.lut_rgb)} colors (Merged mode, placeholder stacks)")
+        
+        # Branch 4: 4-Color Standard (1024)
         else:
             print("[IMAGE_PROCESSOR] Detected 4-Color Standard mode")
             
@@ -263,8 +353,9 @@ class LuminaImageProcessor:
             
             print(f"✅ LUT loaded: {len(self.lut_rgb)} colors (filtered {dropped} outliers)")
         
-        # Build KD-Tree
-        self.kdtree = KDTree(self.lut_rgb)
+        # Build KD-Tree in CIELAB space for perceptually accurate color matching
+        self.lut_lab = self._rgb_to_lab(self.lut_rgb)
+        self.kdtree = KDTree(self.lut_lab)
     
     def process_image(self, image_path, target_width_mm, modeling_mode,
                      quantize_colors, auto_bg, bg_tol,
@@ -389,6 +480,16 @@ class LuminaImageProcessor:
             matched_rgb, material_matrix, bg_reference = self._process_pixel_mode(
                 rgb_arr, target_h, target_w
             )
+        
+        # >>> 孤立像素清理（可选后处理）<<<
+        if modeling_mode == ModelingMode.HIGH_FIDELITY and self.enable_cleanup:
+            try:
+                from core.isolated_pixel_cleanup import cleanup_isolated_pixels
+                matched_rgb, material_matrix = cleanup_isolated_pixels(
+                    material_matrix, matched_rgb, self.lut_rgb, self.ref_stacks
+                )
+            except ImportError:
+                print("[IMAGE_PROCESSOR] ⚠️ isolated_pixel_cleanup module not found, skipping")
         
         # Background removal - combine alpha transparency with optional auto-bg
         mask_transparent = mask_transparent_initial.copy()
@@ -556,10 +657,11 @@ class LuminaImageProcessor:
         print(f"[IMAGE_PROCESSOR] Found {len(unique_colors)} unique colors")
         print(f"[IMAGE_PROCESSOR] ⏱️ Find unique colors: {time.time() - t0:.2f}s")
         
-        # Match to LUT
+        # Match to LUT (in CIELAB space for perceptual accuracy)
         t0 = time.time()
-        print(f"[IMAGE_PROCESSOR] Matching colors to LUT...")
-        _, unique_indices = self.kdtree.query(unique_colors.astype(float))
+        print(f"[IMAGE_PROCESSOR] Matching colors to LUT (CIELAB space)...")
+        unique_lab = self._rgb_to_lab(unique_colors)
+        _, unique_indices = self.kdtree.query(unique_lab)
         print(f"[IMAGE_PROCESSOR] ⏱️ LUT matching: {time.time() - t0:.2f}s")
         
         # 🚀 优化：构建颜色编码查找表
@@ -618,10 +720,11 @@ class LuminaImageProcessor:
         Pixel art mode image processing
         Direct pixel-level color matching, no smoothing
         """
-        print(f"[IMAGE_PROCESSOR] Direct pixel-level matching (Pixel Art mode)...")
+        print(f"[IMAGE_PROCESSOR] Direct pixel-level matching (Pixel Art mode, CIELAB space)...")
         
         flat_rgb = rgb_arr.reshape(-1, 3)
-        _, indices = self.kdtree.query(flat_rgb)
+        flat_lab = self._rgb_to_lab(flat_rgb)
+        _, indices = self.kdtree.query(flat_lab)
         
         matched_rgb = self.lut_rgb[indices].reshape(target_h, target_w, 3)
         material_matrix = self.ref_stacks[indices].reshape(
@@ -631,3 +734,49 @@ class LuminaImageProcessor:
         print(f"[IMAGE_PROCESSOR] Direct matching complete!")
         
         return matched_rgb, material_matrix, rgb_arr
+
+    def _extract_wireframe_mask(self, rgb_arr, target_w, pixel_scale, wire_width_mm=0.6):
+        """
+        Extract cloisonné wireframe mask using edge detection + dilation.
+
+        The mask marks pixels that should become raised "gold wire" in the
+        final 3D model.  The dilation kernel is sized so that the wire is
+        physically printable (≥ nozzle width).
+
+        Args:
+            rgb_arr:        (H, W, 3) uint8 – colour-matched or quantised image.
+            target_w:       int – image width in pixels (used only for logging).
+            pixel_scale:    float – mm per pixel.
+            wire_width_mm:  float – desired physical wire width in mm (default 0.6).
+
+        Returns:
+            mask_wireframe: (H, W) bool ndarray – True where wire should be.
+        """
+        import time
+        t0 = time.time()
+
+        # 1. Greyscale + light blur to suppress quantisation noise
+        gray = cv2.cvtColor(rgb_arr.astype(np.uint8), cv2.COLOR_RGB2GRAY)
+        gray = cv2.GaussianBlur(gray, (3, 3), 0)
+
+        # 2. Adaptive Canny thresholds (Otsu-based)
+        otsu_thresh, _ = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        low = max(10, int(otsu_thresh * 0.4))
+        high = max(30, int(otsu_thresh * 0.8))
+        edges = cv2.Canny(gray, low, high)
+
+        # 3. Dilate to physical wire width
+        wire_px = max(1, int(round(wire_width_mm / pixel_scale)))
+        if wire_px % 2 == 0:
+            wire_px += 1  # kernel must be odd
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (wire_px, wire_px))
+        dilated = cv2.dilate(edges, kernel, iterations=1)
+
+        mask_wireframe = dilated > 0
+
+        dt = time.time() - t0
+        print(f"[CLOISONNE] Wireframe extracted: Canny({low},{high}), "
+              f"dilate {wire_px}px ({wire_width_mm}mm), "
+              f"{np.sum(mask_wireframe)} wire pixels, {dt:.2f}s")
+
+        return mask_wireframe

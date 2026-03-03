@@ -155,7 +155,8 @@ def on_apply_color_replacement(cache, selected_color, replacement_color,
         tuple: (preview_image, updated_cache, palette_html, updated_replacement_map, 
                 updated_history, status)
     """
-    from core.converter import update_preview_with_replacements, generate_palette_html
+    from core.converter import update_preview_with_replacements
+    from ui.palette_extension import generate_palette_html
     
     if cache is None:
         return None, None, "", replacement_map, replacement_history, I18n.get('palette_need_preview', lang)
@@ -207,7 +208,8 @@ def on_clear_color_replacements(cache, replacement_map, replacement_history,
         tuple: (preview_image, updated_cache, palette_html, empty_replacement_map, 
                 updated_history, status)
     """
-    from core.converter import update_preview_with_replacements, generate_palette_html
+    from core.converter import update_preview_with_replacements
+    from ui.palette_extension import generate_palette_html
     
     if cache is None:
         return None, None, "", {}, [], I18n.get('palette_need_preview', lang)
@@ -237,7 +239,7 @@ def on_preview_generated_update_palette(cache, lang: str = "zh"):
     Returns:
         tuple: (palette_html, selected_color_state)
     """
-    from core.converter import generate_palette_html
+    from ui.palette_extension import generate_palette_html
     
     if cache is None:
         placeholder = I18n.get('conv_palette_replacements_placeholder', lang)
@@ -482,7 +484,8 @@ def on_undo_color_replacement(cache, replacement_map, replacement_history,
         tuple: (preview_image, updated_cache, palette_html, updated_replacement_map, 
                 updated_history, status)
     """
-    from core.converter import update_preview_with_replacements, generate_palette_html
+    from core.converter import update_preview_with_replacements
+    from ui.palette_extension import generate_palette_html
     
     if cache is None:
         return None, None, "", replacement_map, replacement_history, I18n.get('palette_need_preview', lang)
@@ -514,23 +517,45 @@ def run_extraction_wrapper(img, points, offset_x, offset_y, zoom, barrel, wb, br
     )
     
     if "8-Color" in color_mode and lut_path:
-        os.makedirs("assets", exist_ok=True)
+        import sys
+        # Handle both dev and frozen modes
+        if getattr(sys, 'frozen', False):
+            assets_dir = os.path.join(os.getcwd(), "assets")
+        else:
+            assets_dir = "assets"
+        
+        os.makedirs(assets_dir, exist_ok=True)
         page_idx = 1 if "1" in str(page_choice) else 2
-        temp_path = os.path.join("assets", f"temp_8c_page_{page_idx}.npy")
+        temp_path = os.path.join(assets_dir, f"temp_8c_page_{page_idx}.npy")
         try:
             lut = np.load(lut_path)
             np.save(temp_path, lut)
+            # Return the assets path, not the original LUT_FILE_PATH
+            # This ensures manual corrections are saved to the correct location
+            print(f"[8-COLOR] Saved page {page_idx} to: {temp_path}")
             lut_path = temp_path
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[8-COLOR] Error saving page {page_idx}: {e}")
     
     return vis, prev, lut_path, status
 
 
 def merge_8color_data():
     """Concatenate two 8-color pages and save to LUT_FILE_PATH."""
-    path1 = os.path.join("assets", "temp_8c_page_1.npy")
-    path2 = os.path.join("assets", "temp_8c_page_2.npy")
+    import sys
+    # Handle both dev and frozen modes
+    if getattr(sys, 'frozen', False):
+        assets_dir = os.path.join(os.getcwd(), "assets")
+    else:
+        assets_dir = "assets"
+    
+    path1 = os.path.join(assets_dir, "temp_8c_page_1.npy")
+    path2 = os.path.join(assets_dir, "temp_8c_page_2.npy")
+    
+    print(f"[MERGE_8COLOR] Looking for page 1: {path1}")
+    print(f"[MERGE_8COLOR] Looking for page 2: {path2}")
+    print(f"[MERGE_8COLOR] Page 1 exists: {os.path.exists(path1)}")
+    print(f"[MERGE_8COLOR] Page 2 exists: {os.path.exists(path2)}")
     
     if not os.path.exists(path1) or not os.path.exists(path2):
         return None, "❌ Missing temp pages. Please extract Page 1 and Page 2 first."
@@ -538,8 +563,461 @@ def merge_8color_data():
     try:
         lut1 = np.load(path1)
         lut2 = np.load(path2)
+        print(f"[MERGE_8COLOR] Page 1 shape: {lut1.shape}")
+        print(f"[MERGE_8COLOR] Page 2 shape: {lut2.shape}")
+        
         merged = np.concatenate([lut1, lut2], axis=0)
+        print(f"[MERGE_8COLOR] Merged shape: {merged.shape}")
+        
         np.save(LUT_FILE_PATH, merged)
+        print(f"[MERGE_8COLOR] Saved merged LUT to: {LUT_FILE_PATH}")
+        
         return LUT_FILE_PATH, "✅ 8-Color LUT merged and saved!"
     except Exception as e:
+        print(f"[MERGE_8COLOR] Error: {e}")
+        import traceback
+        traceback.print_exc()
         return None, f"❌ Merge failed: {e}"
+
+
+# ═══════════════════════════════════════════════════════════════
+# LUT Merge Callbacks
+# ═══════════════════════════════════════════════════════════════
+
+def on_merge_lut_select(display_name, lang="zh"):
+    """
+    When user selects a LUT in the merge tab, detect its color mode.
+
+    Returns:
+        str: Markdown showing detected mode
+    """
+    from core.lut_merger import LUTMerger
+
+    if not display_name:
+        label = I18n.get('merge_mode_label', lang)
+        unknown = I18n.get('merge_mode_unknown', lang)
+        return f"**{label}**: {unknown}"
+
+    lut_path = LUTManager.get_lut_path(display_name)
+    if not lut_path:
+        return f"**{I18n.get('merge_mode_label', lang)}**: ❌ File not found"
+
+    try:
+        mode, count = LUTMerger.detect_color_mode(lut_path)
+        return f"**{I18n.get('merge_mode_label', lang)}**: {mode} ({count} colors)"
+    except Exception as e:
+        return f"**{I18n.get('merge_mode_label', lang)}**: ❌ {e}"
+
+
+def on_merge_primary_select(display_name, lang="zh"):
+    """
+    When user selects the primary LUT, detect its mode and filter secondary choices.
+
+    Primary must be 6-Color or 8-Color.
+    - 8-Color primary → secondary can be BW, 4-Color, 6-Color
+    - 6-Color primary → secondary can be BW, 4-Color
+
+    Returns:
+        tuple: (mode_markdown, updated_secondary_dropdown)
+    """
+    from core.lut_merger import LUTMerger
+
+    if not display_name:
+        return (
+            I18n.get('merge_primary_hint', lang),
+            gr.Dropdown(choices=[], value=[]),
+        )
+
+    lut_path = LUTManager.get_lut_path(display_name)
+    if not lut_path:
+        return (
+            f"**{I18n.get('merge_mode_label', lang)}**: ❌ File not found",
+            gr.Dropdown(choices=[], value=[]),
+        )
+
+    try:
+        mode, count = LUTMerger.detect_color_mode(lut_path)
+    except Exception as e:
+        return (
+            f"**{I18n.get('merge_mode_label', lang)}**: ❌ {e}",
+            gr.Dropdown(choices=[], value=[]),
+        )
+
+    # Primary must be 6-Color or 8-Color
+    if mode not in ("6-Color", "8-Color"):
+        return (
+            I18n.get('merge_primary_not_high', lang),
+            gr.Dropdown(choices=[], value=[]),
+        )
+
+    mode_md = f"**{I18n.get('merge_mode_label', lang)}**: {mode} ({count} colors)"
+
+    # Determine allowed secondary modes
+    # Exclude "Merged" to prevent stale/corrupt merged LUTs from being re-merged
+    if mode == "8-Color":
+        allowed_modes = {"BW", "4-Color", "6-Color"}
+    else:  # 6-Color
+        allowed_modes = {"BW", "4-Color"}
+
+    # Filter LUT choices: exclude the primary itself, only include allowed modes
+    all_choices = LUTManager.get_lut_choices()
+    filtered = []
+    for choice_name in all_choices:
+        if choice_name == display_name:
+            continue
+        path = LUTManager.get_lut_path(choice_name)
+        if not path:
+            continue
+        try:
+            m, _ = LUTMerger.detect_color_mode(path)
+            if m in allowed_modes:
+                filtered.append(choice_name)
+        except Exception:
+            continue
+
+    return (
+        mode_md,
+        gr.Dropdown(choices=filtered, value=[]),
+    )
+
+
+def on_merge_secondary_change(selected_names, lang="zh"):
+    """
+    When user changes secondary LUT selection, show detected modes.
+
+    Args:
+        selected_names: List of selected LUT display names (multi-select)
+
+    Returns:
+        str: Markdown showing detected modes for each selected LUT
+    """
+    from core.lut_merger import LUTMerger
+
+    if not selected_names:
+        return I18n.get('merge_secondary_none', lang)
+
+    lines = [f"**{I18n.get('merge_secondary_modes', lang)}**:"]
+    for name in selected_names:
+        path = LUTManager.get_lut_path(name)
+        if not path:
+            lines.append(f"- {name}: ❌")
+            continue
+        try:
+            mode, count = LUTMerger.detect_color_mode(path)
+            lines.append(f"- {name}: **{mode}** ({count} colors)")
+        except Exception as e:
+            lines.append(f"- {name}: ❌ {e}")
+
+    return "\n".join(lines)
+
+
+def on_merge_execute(primary_name, secondary_names, dedup_threshold, lang="zh"):
+    """
+    Execute LUT merge: primary + multiple secondary LUTs.
+
+    Returns:
+        tuple: (status_markdown, updated_primary_dropdown, updated_secondary_dropdown)
+    """
+    from core.lut_merger import LUTMerger
+    import time
+
+    # Validate primary
+    if not primary_name:
+        return I18n.get('merge_error_no_lut', lang), gr.update(), gr.update()
+
+    # Validate secondary
+    if not secondary_names or len(secondary_names) == 0:
+        return I18n.get('merge_error_no_secondary', lang), gr.update(), gr.update()
+
+    primary_path = LUTManager.get_lut_path(primary_name)
+    if not primary_path:
+        return I18n.get('merge_error_no_lut', lang), gr.update(), gr.update()
+
+    try:
+        # Detect primary mode
+        primary_mode, _ = LUTMerger.detect_color_mode(primary_path)
+
+        # Load primary
+        primary_rgb, primary_stacks = LUTMerger.load_lut_with_stacks(primary_path, primary_mode)
+        entries = [(primary_rgb, primary_stacks, primary_mode)]
+        all_modes = [primary_mode]
+
+        # Load each secondary (skip Merged LUTs to prevent stale data contamination)
+        for sec_name in secondary_names:
+            sec_path = LUTManager.get_lut_path(sec_name)
+            if not sec_path:
+                continue
+            sec_mode, _ = LUTMerger.detect_color_mode(sec_path)
+            if sec_mode == "Merged":
+                print(f"[MERGE] Skipping Merged LUT as secondary: {sec_name}")
+                continue
+            sec_rgb, sec_stacks = LUTMerger.load_lut_with_stacks(sec_path, sec_mode)
+            entries.append((sec_rgb, sec_stacks, sec_mode))
+            all_modes.append(sec_mode)
+
+        if len(entries) < 2:
+            return I18n.get('merge_error_no_lut', lang), gr.update(), gr.update()
+
+        # Validate compatibility
+        valid, err_msg = LUTMerger.validate_compatibility(all_modes)
+        if not valid:
+            return I18n.get('merge_error_incompatible', lang).format(msg=err_msg), gr.update(), gr.update()
+
+        # Merge
+        merged_rgb, merged_stacks, stats = LUTMerger.merge_luts(entries, dedup_threshold=dedup_threshold)
+
+        # Save to Custom folder
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        mode_str = "+".join(all_modes)
+        output_name = f"Merged_{mode_str}_{timestamp}.npz"
+        custom_dir = os.path.join(LUTManager.LUT_PRESET_DIR, "Custom")
+        os.makedirs(custom_dir, exist_ok=True)
+        output_path = os.path.join(custom_dir, output_name)
+
+        saved_path = LUTMerger.save_merged_lut(merged_rgb, merged_stacks, output_path)
+
+        # Build success message
+        status = I18n.get('merge_status_success', lang).format(
+            before=stats['total_before'],
+            after=stats['total_after'],
+            exact=stats['exact_dupes'],
+            similar=stats['similar_removed'],
+            path=os.path.basename(saved_path),
+        )
+
+        # Refresh dropdown choices
+        new_choices = LUTManager.get_lut_choices()
+        return status, gr.Dropdown(choices=new_choices), gr.Dropdown(choices=[], value=[])
+
+    except Exception as e:
+        print(f"[MERGE] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return I18n.get('merge_error_failed', lang).format(msg=str(e)), gr.update(), gr.update()
+
+
+# ═══════════════════════════════════════════════════════════════
+# Color Merging Callbacks
+# ═══════════════════════════════════════════════════════════════
+
+def on_merge_preview(cache, merge_enable, merge_threshold, merge_max_distance,
+                    loop_pos, add_loop, loop_width, loop_length, loop_hole, loop_angle,
+                    lang: str = "zh"):
+    """
+    Generate preview with color merging applied.
+    
+    Args:
+        cache: Preview cache from generate_preview_cached
+        merge_enable: Whether merging is enabled
+        merge_threshold: Usage threshold percentage (0.1-5.0)
+        merge_max_distance: Maximum Delta-E distance (5-50)
+        loop_pos: Loop position tuple
+        add_loop: Whether loop is enabled
+        loop_width: Loop width in mm
+        loop_length: Loop length in mm
+        loop_hole: Loop hole diameter in mm
+        loop_angle: Loop rotation angle
+        lang: Language code
+    
+    Returns:
+        tuple: (preview_image, updated_cache, palette_html, merge_map, merge_stats, status)
+    """
+    from core.converter import update_preview_with_replacements, extract_color_palette
+    from core.color_merger import ColorMerger
+    from core.image_processing import LuminaImageProcessor
+    from ui.palette_extension import generate_palette_html
+    
+    if cache is None:
+        return None, None, "", {}, {}, I18n.get('palette_need_preview', lang)
+    
+    # If merging is disabled, return empty merge map
+    if not merge_enable:
+        return gr.update(), cache, gr.update(), {}, {}, I18n.get('merge_status_empty', lang)
+    
+    # Extract color palette from cache
+    palette = cache.get('color_palette', [])
+    
+    if not palette:
+        return gr.update(), cache, gr.update(), {}, {}, I18n.get('merge_error_empty_palette', lang)
+    
+    # Handle edge cases
+    if len(palette) == 1:
+        return gr.update(), cache, gr.update(), {}, {}, I18n.get('merge_error_single_color', lang)
+    
+    # Build merge map using ColorMerger
+    merger = ColorMerger(LuminaImageProcessor._rgb_to_lab)
+    merge_map = merger.build_merge_map(palette, merge_threshold, merge_max_distance)
+    
+    # Check if all colors are below threshold
+    if not merge_map and len(palette) > 1:
+        low_usage_colors = merger.identify_low_usage_colors(palette, merge_threshold)
+        if len(low_usage_colors) >= len(palette):
+            return gr.update(), cache, gr.update(), {}, {}, I18n.get('merge_error_all_below_threshold', lang)
+    
+    # If no colors to merge, return info message
+    if not merge_map:
+        return gr.update(), cache, gr.update(), {}, {}, I18n.get('merge_info_low_usage', lang).format(
+            count=0, threshold=merge_threshold
+        )
+    
+    # Apply merge map to preview (without modifying cache yet)
+    # Create a temporary cache with merged colors (deep copy matched_rgb to avoid modifying original)
+    temp_cache = cache.copy()
+    matched_rgb = temp_cache.get('matched_rgb')
+    
+    if matched_rgb is not None:
+        # Deep copy to avoid modifying original cache
+        matched_rgb_copy = matched_rgb.copy()
+        merged_rgb = merger.apply_color_merging(matched_rgb_copy, merge_map)
+        temp_cache['matched_rgb'] = merged_rgb
+        
+        # Re-extract palette from merged image
+        merged_palette = extract_color_palette(temp_cache)
+        temp_cache['color_palette'] = merged_palette
+    else:
+        merged_palette = palette
+    
+    # Calculate quality metric
+    quality = merger.calculate_quality_metric(palette, merged_palette, merge_map)
+    
+    # Build merge stats
+    merge_stats = {
+        'total_colors_before': len(palette),
+        'total_colors_after': len(merged_palette),
+        'colors_merged': len(merge_map),
+        'merge_map': merge_map,
+        'quality_metric': quality
+    }
+    
+    # Generate updated preview
+    display, updated_cache, palette_html = update_preview_with_replacements(
+        temp_cache, {}, loop_pos, add_loop,
+        loop_width, loop_length, loop_hole, loop_angle,
+        merge_map=None,  # Don't pass merge_map here since temp_cache already has merged colors
+        lang=lang
+    )
+    
+    # Status message
+    status_msg = I18n.get('merge_status_preview', lang).format(
+        merged=len(merge_map),
+        quality=quality
+    )
+    
+    return display, updated_cache, palette_html, merge_map, merge_stats, status_msg
+
+
+def on_merge_apply(cache, merge_map, merge_stats, loop_pos, add_loop,
+                  loop_width, loop_length, loop_hole, loop_angle,
+                  lang: str = "zh"):
+    """
+    Apply color merging to the cached image data.
+    
+    Args:
+        cache: Preview cache from generate_preview_cached
+        merge_map: Dict mapping source hex to target hex colors
+        merge_stats: Merge statistics dict
+        loop_pos: Loop position tuple
+        add_loop: Whether loop is enabled
+        loop_width: Loop width in mm
+        loop_length: Loop length in mm
+        loop_hole: Loop hole diameter in mm
+        loop_angle: Loop rotation angle
+        lang: Language code
+    
+    Returns:
+        tuple: (preview_image, updated_cache, palette_html, status)
+    """
+    from core.converter import update_preview_with_replacements, extract_color_palette
+    from core.color_merger import ColorMerger
+    from core.image_processing import LuminaImageProcessor
+    
+    if cache is None:
+        return None, None, "", I18n.get('palette_need_preview', lang)
+    
+    if not merge_map:
+        return gr.update(), cache, gr.update(), I18n.get('merge_status_empty', lang)
+    
+    # Save original matched_rgb for potential revert
+    if 'original_matched_rgb' not in cache:
+        cache['original_matched_rgb'] = cache.get('matched_rgb').copy()
+    
+    # Apply merging
+    merger = ColorMerger(LuminaImageProcessor._rgb_to_lab)
+    matched_rgb = cache.get('matched_rgb')
+    
+    if matched_rgb is not None:
+        merged_rgb = merger.apply_color_merging(matched_rgb, merge_map)
+        cache['matched_rgb'] = merged_rgb
+        
+        # Re-extract palette
+        merged_palette = extract_color_palette(cache)
+        cache['color_palette'] = merged_palette
+    
+    # Store merge info in cache
+    cache['merge_map'] = merge_map
+    cache['merge_stats'] = merge_stats
+    
+    # Generate updated preview
+    display, updated_cache, palette_html = update_preview_with_replacements(
+        cache, {}, loop_pos, add_loop,
+        loop_width, loop_length, loop_hole, loop_angle,
+        lang=lang
+    )
+    
+    # Status message
+    status_msg = I18n.get('merge_status_applied', lang).format(
+        merged=len(merge_map)
+    )
+    
+    return display, updated_cache, palette_html, status_msg
+
+
+def on_merge_revert(cache, loop_pos, add_loop, loop_width, loop_length, loop_hole, loop_angle,
+                   lang: str = "zh"):
+    """
+    Revert color merging and restore original colors.
+    
+    Args:
+        cache: Preview cache from generate_preview_cached
+        loop_pos: Loop position tuple
+        add_loop: Whether loop is enabled
+        loop_width: Loop width in mm
+        loop_length: Loop length in mm
+        loop_hole: Loop hole diameter in mm
+        loop_angle: Loop rotation angle
+        lang: Language code
+    
+    Returns:
+        tuple: (preview_image, updated_cache, palette_html, empty_merge_map, empty_stats, status)
+    """
+    from core.converter import update_preview_with_replacements, extract_color_palette
+    
+    if cache is None:
+        return None, None, "", {}, {}, I18n.get('palette_need_preview', lang)
+    
+    # Restore original matched_rgb if it exists
+    if 'original_matched_rgb' in cache:
+        cache['matched_rgb'] = cache['original_matched_rgb'].copy()
+        del cache['original_matched_rgb']
+        
+        # Re-extract palette
+        original_palette = extract_color_palette(cache)
+        cache['color_palette'] = original_palette
+    
+    # Clear merge info
+    if 'merge_map' in cache:
+        del cache['merge_map']
+    if 'merge_stats' in cache:
+        del cache['merge_stats']
+    
+    # Generate updated preview
+    display, updated_cache, palette_html = update_preview_with_replacements(
+        cache, {}, loop_pos, add_loop,
+        loop_width, loop_length, loop_hole, loop_angle,
+        lang=lang
+    )
+    
+    # Status message
+    status_msg = I18n.get('merge_status_reverted', lang)
+    
+    return display, updated_cache, palette_html, {}, {}, status_msg

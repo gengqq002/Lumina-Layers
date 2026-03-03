@@ -1,9 +1,18 @@
 """Lumina Studio configuration: paths, printer/smart config, and legacy i18n data."""
 
 import os
+import sys
 from enum import Enum
 
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
+# Handle PyInstaller bundled resources
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable - use current working directory
+    _BASE_DIR = os.getcwd()
+else:
+    # Running as script
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+OUTPUT_DIR = os.path.join(_BASE_DIR, "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
@@ -91,7 +100,7 @@ class ColorSystem:
             2: [236, 0, 140, 255],    # Magenta
             3: [0, 174, 66, 255],     # Green
             4: [244, 238, 42, 255],   # Yellow
-            5: [20, 20, 20, 255]      # Black
+            5: [0, 0, 0, 255]         # Black (纯黑 #000000)
         },
         'map': {"White": 0, "Cyan": 1, "Magenta": 2, "Green": 3, "Yellow": 4, "Black": 5},
         'corner_labels': ["白色 (左上)", "青色 (右上)", "品红 (右下)", "黄色 (左下)"],
@@ -103,19 +112,69 @@ class ColorSystem:
         'slots': ['Slot 1 (White)', 'Slot 2 (Cyan)', 'Slot 3 (Magenta)', 'Slot 4 (Yellow)', 'Slot 5 (Black)', 'Slot 6 (Red)', 'Slot 7 (Deep Blue)', 'Slot 8 (Green)'],
         'preview': {
             0: [255, 255, 255, 255], 1: [0, 134, 214, 255], 2: [236, 0, 140, 255], 3: [244, 238, 42, 255],
-            4: [20, 20, 20, 255], 5: [193, 46, 31, 255], 6: [10, 41, 137, 255], 7: [0, 174, 66, 255]
+            4: [0, 0, 0, 255], 5: [193, 46, 31, 255], 6: [10, 41, 137, 255], 7: [0, 174, 66, 255]
         },
         'map': {'White': 0, 'Cyan': 1, 'Magenta': 2, 'Yellow': 3, 'Black': 4, 'Red': 5, 'Deep Blue': 6, 'Green': 7},
         'corner_labels': ['TL', 'TR', 'BR', 'BL']
     }
 
+    BW = {
+        'name': 'BW',
+        'base': 2,
+        'layer_count': 5,
+        'slots': ["White", "Black"],
+        'preview': {
+            0: [255, 255, 255, 255],  # White
+            1: [0, 0, 0, 255]         # Black (纯黑 #000000)
+        },
+        'map': {"White": 0, "Black": 1},
+        'corner_labels': ["白色 (左上)", "黑色 (右上)", "黑色 (右下)", "黑色 (左下)"],
+        'corner_labels_en': ["White (TL)", "Black (TR)", "Black (BR)", "Black (BL)"]
+    }
+
     @staticmethod
     def get(mode: str):
+        """
+        Get color system configuration (Unified 4-Color Backend)
+        
+        Args:
+            mode: Color mode string (4-Color/6-Color/8-Color/BW)
+        
+        Returns:
+            Color system configuration dict
+        
+        Note:
+            4-Color mode defaults to RYBW palette.
+            CMYW and RYBW share the same processing pipeline.
+        """
+        if mode is None:
+            return ColorSystem.RYBW  # Default fallback
+        
+        # Unified 4-Color mode (defaults to RYBW)
+        if mode == "4-Color" or "4-Color" in mode:
+            return ColorSystem.RYBW
+        
+        # Check specific patterns
         if "8-Color" in mode:
             return ColorSystem.EIGHT_COLOR
         if "6-Color" in mode:
             return ColorSystem.SIX_COLOR
-        return ColorSystem.CMYW if "CMYW" in mode else ColorSystem.RYBW
+        
+        # Merged LUT: use 8-Color config (superset of all material IDs 0-7)
+        if mode == "Merged":
+            return ColorSystem.EIGHT_COLOR
+        
+        # Legacy support for old mode strings
+        if "RYBW" in mode:
+            return ColorSystem.RYBW
+        if "CMYW" in mode:
+            return ColorSystem.CMYW
+        
+        # Check BW last to avoid matching RYBW
+        if mode == "BW" or mode == "BW (Black & White)":
+            return ColorSystem.BW
+        
+        return ColorSystem.RYBW  # Default fallback
 
 # ========== Global Constants ==========
 
@@ -129,6 +188,48 @@ LUT_FILE_PATH = os.path.join(OUTPUT_DIR, "lumina_lut.npy")
 # Converter constants
 PREVIEW_SCALE = 2
 PREVIEW_MARGIN = 30
+
+
+class BedManager:
+    """Print bed size manager for preview rendering.
+    
+    Provides standard bed sizes and dynamic canvas scaling
+    so that models on a 400mm bed are visually comparable to
+    those on a 180mm bed.
+    """
+
+    # (label, width_mm, height_mm)
+    BEDS = [
+        ("180×180 mm", 180, 180),
+        ("220×220 mm", 220, 220),
+        ("256×256 mm", 256, 256),
+        ("300×300 mm", 300, 300),
+        ("400×400 mm", 400, 400),
+    ]
+
+    DEFAULT_BED = "256×256 mm"
+
+    # Target canvas pixels (long edge) – keeps UI responsive
+    _TARGET_CANVAS_PX = 1200
+
+    @classmethod
+    def get_choices(cls):
+        """Return list of (label, label) tuples for Gradio Radio/Dropdown."""
+        return [(b[0], b[0]) for b in cls.BEDS]
+
+    @classmethod
+    def get_bed_size(cls, label: str):
+        """Return (width_mm, height_mm) for a given label."""
+        for name, w, h in cls.BEDS:
+            if name == label:
+                return (w, h)
+        return (256, 256)  # fallback
+
+    @classmethod
+    def compute_scale(cls, bed_w_mm, bed_h_mm):
+        """Pixels-per-mm so the bed fits in _TARGET_CANVAS_PX."""
+        long_edge = max(bed_w_mm, bed_h_mm)
+        return cls._TARGET_CANVAS_PX / long_edge
 
 
 # ========== Vector Engine Configuration ==========

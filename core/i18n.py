@@ -18,8 +18,8 @@ class I18n:
             'en': '✨ Lumina Studio'
         },
         'app_subtitle': {
-            'zh': '多材料3D打印色彩系统 | v1.5.6',
-            'en': 'Multi-Material 3D Print Color System | v1.5.6'
+            'zh': '多材料3D打印色彩系统 | v1.6.0',
+            'en': 'Multi-Material 3D Print Color System | v1.6.0'
         },
         'lang_btn_zh': {
             'zh': '🌐 中文',
@@ -244,6 +244,10 @@ class I18n:
             'zh': '背板 (mm)',
             'en': 'Backing (mm)'
         },
+        'conv_backing_color': {
+            'zh': '底板颜色',
+            'en': 'Backing Color'
+        },
         'conv_preview_btn': {
             'zh': '👁️ 生成预览',
             'en': '👁️ Generate Preview'
@@ -335,6 +339,58 @@ class I18n:
         'conv_loop_info': {
             'zh': '挂孔位置',
             'en': 'Loop Position'
+        },
+        'conv_outline_section': {
+            'zh': '##### 外轮廓设置',
+            'en': '##### Outline Settings'
+        },
+        'conv_outline_enable': {
+            'zh': '启用外轮廓',
+            'en': 'Enable Outline'
+        },
+        'conv_outline_width': {
+            'zh': '轮廓宽度(mm)',
+            'en': 'Outline Width(mm)'
+        },
+        'conv_cloisonne_section': {
+            'zh': '##### 掐丝珐琅特效',
+            'en': '##### Cloisonné Effect'
+        },
+        'conv_cloisonne_enable': {
+            'zh': '启用掐丝珐琅',
+            'en': 'Enable Cloisonné'
+        },
+        'conv_cloisonne_wire_width': {
+            'zh': '丝线宽度(mm)',
+            'en': 'Wire Width(mm)'
+        },
+        'conv_cloisonne_wire_height': {
+            'zh': '丝线高度(mm)',
+            'en': 'Wire Height(mm)'
+        },
+        'conv_cloisonne_wire_color': {
+            'zh': '丝线颜色槽位',
+            'en': 'Wire Color Slot'
+        },
+        'conv_free_color_btn': {
+            'zh': '🎯 标记为自由色',
+            'en': '🎯 Mark as Free Color'
+        },
+        'conv_free_color_clear_btn': {
+            'zh': '清除自由色',
+            'en': 'Clear Free Colors'
+        },
+        'conv_coating_section': {
+            'zh': '##### 透明镀层',
+            'en': '##### Transparent Coating'
+        },
+        'conv_coating_enable': {
+            'zh': '启用透明镀层',
+            'en': 'Enable Coating'
+        },
+        'conv_coating_height': {
+            'zh': '镀层厚度(mm)',
+            'en': 'Coating Height(mm)'
         },
         'conv_status': {
             'zh': '状态',
@@ -606,6 +662,85 @@ class I18n:
             'zh': '↩️ 已撤销',
             'en': '↩️ Undone'
         },
+        
+        # ==================== Color Merging ====================
+        'merge_enable_label': {
+            'zh': '启用自动颜色合并 Enable Auto Color Merging',
+            'en': 'Enable Auto Color Merging'
+        },
+        'merge_enable_info': {
+            'zh': '自动合并低使用率颜色到相近颜色',
+            'en': 'Automatically merge low-usage colors to similar colors'
+        },
+        'merge_threshold_label': {
+            'zh': '使用率阈值 Usage Threshold (%)',
+            'en': 'Usage Threshold (%)'
+        },
+        'merge_threshold_info': {
+            'zh': '低于此百分比的颜色将被合并',
+            'en': 'Colors below this percentage will be merged'
+        },
+        'merge_max_distance_label': {
+            'zh': '最大颜色距离 Max Color Distance (Delta-E)',
+            'en': 'Max Color Distance (Delta-E)'
+        },
+        'merge_max_distance_info': {
+            'zh': '只合并距离小于此值的颜色',
+            'en': 'Only merge colors with distance below this value'
+        },
+        'merge_preview_btn': {
+            'zh': '🔍 预览合并效果 Preview Merge',
+            'en': '🔍 Preview Merge'
+        },
+        'merge_apply_btn': {
+            'zh': '✅ 应用合并 Apply Merge',
+            'en': '✅ Apply Merge'
+        },
+        'merge_revert_btn': {
+            'zh': '↩️ 恢复原始 Revert',
+            'en': '↩️ Revert'
+        },
+        'merge_status_empty': {
+            'zh': '💡 调整参数后点击预览',
+            'en': '💡 Adjust parameters and click preview'
+        },
+        'merge_status_preview': {
+            'zh': '🔍 预览: {merged} 种颜色被合并 (质量: {quality:.1f})',
+            'en': '🔍 Preview: {merged} colors merged (quality: {quality:.1f})'
+        },
+        'merge_status_applied': {
+            'zh': '✅ 已应用: {merged} 种颜色被合并',
+            'en': '✅ Applied: {merged} colors merged'
+        },
+        'merge_status_reverted': {
+            'zh': '↩️ 已恢复到原始颜色',
+            'en': '↩️ Reverted to original colors'
+        },
+        'merge_error_empty_palette': {
+            'zh': '❌ 调色板为空，无法执行颜色合并',
+            'en': '❌ Empty palette, cannot perform color merging'
+        },
+        'merge_error_single_color': {
+            'zh': '❌ 图像只包含一种颜色，已禁用颜色合并',
+            'en': '❌ Image contains only one color, merging disabled'
+        },
+        'merge_error_all_below_threshold': {
+            'zh': '⚠️ 所有颜色使用率都低于阈值，已禁用颜色合并以防止颜色丢失',
+            'en': '⚠️ All colors below threshold, merging disabled to prevent color loss'
+        },
+        'merge_warning_no_targets': {
+            'zh': '⚠️ 部分颜色未找到合适的合并目标，保持原始颜色',
+            'en': '⚠️ Some colors have no suitable merge targets, keeping original'
+        },
+        'merge_info_low_usage': {
+            'zh': '💡 检测到 {count} 种低使用率颜色 (<{threshold}%)',
+            'en': '💡 Detected {count} low-usage colors (<{threshold}%)'
+        },
+        'merge_accordion_title': {
+            'zh': '🎨 颜色合并 Color Merging',
+            'en': '🎨 Color Merging'
+        },
+        
         'lut_grid_load_hint': {
             'zh': '加载 LUT 后显示可用颜色',
             'en': 'Load LUT to see available colors'
@@ -633,6 +768,66 @@ class I18n:
         'lut_grid_tooltip': {
             'zh': '点击选择: {hex}',
             'en': 'Click to select: {hex}'
+        },
+        'lut_grid_picker_label': {
+            'zh': '🎯 以色找色',
+            'en': '🎯 Find by Color'
+        },
+        'lut_grid_picker_hint': {
+            'zh': '选一个颜色，自动匹配 LUT 中最接近的物理色',
+            'en': 'Pick a color to find the closest match in LUT'
+        },
+        'lut_grid_picker_btn': {
+            'zh': '匹配最近色',
+            'en': 'Find Nearest'
+        },
+        'lut_grid_picker_result': {
+            'zh': '✅ 最接近: {hex} (距离: {dist:.1f})',
+            'en': '✅ Nearest: {hex} (distance: {dist:.1f})'
+        },
+        'lut_grid_hue_all': {
+            'zh': '全部',
+            'en': 'All'
+        },
+        'lut_grid_hue_red': {
+            'zh': '红色系',
+            'en': 'Red'
+        },
+        'lut_grid_hue_orange': {
+            'zh': '橙色系',
+            'en': 'Orange'
+        },
+        'lut_grid_hue_yellow': {
+            'zh': '黄色系',
+            'en': 'Yellow'
+        },
+        'lut_grid_hue_green': {
+            'zh': '绿色系',
+            'en': 'Green'
+        },
+        'lut_grid_hue_cyan': {
+            'zh': '青色系',
+            'en': 'Cyan'
+        },
+        'lut_grid_hue_blue': {
+            'zh': '蓝色系',
+            'en': 'Blue'
+        },
+        'lut_grid_hue_purple': {
+            'zh': '紫色系',
+            'en': 'Purple'
+        },
+        'lut_grid_hue_neutral': {
+            'zh': '中性色',
+            'en': 'Neutral'
+        },
+        'lut_grid_hue_fav': {
+            'zh': '收藏',
+            'en': 'Favorites'
+        },
+        'lut_grid_search_hex_placeholder': {
+            'zh': '输入 Hex 或 RGB 搜索定位 (如 #FF0000 或 255,0,0)',
+            'en': 'Search by Hex or RGB (e.g. #FF0000 or 255,0,0)'
         },
 
         # ==================== Settings ====================
@@ -670,9 +865,107 @@ class I18n:
             'en': '☀️ Day Mode'
         },
         
+        # ==================== LUT Merge Tab ====================
+        'tab_merge': {
+            'zh': '🔀 色卡合并',
+            'en': '🔀 LUT Merge'
+        },
+        'merge_title': {
+            'zh': '### 🔀 色卡合并',
+            'en': '### 🔀 LUT Merge'
+        },
+        'merge_desc': {
+            'zh': '将不同色彩模式的LUT色卡合并为一个，获得更丰富的色彩。',
+            'en': 'Merge LUT cards from different color modes into one for richer colors.'
+        },
+        'merge_lut_primary_label': {
+            'zh': '🎯 主色卡（6色或8色）',
+            'en': '🎯 Primary LUT (6-Color or 8-Color)'
+        },
+        'merge_lut_secondary_label': {
+            'zh': '➕ 副色卡（可多选）',
+            'en': '➕ Secondary LUTs (Multi-select)'
+        },
+        'merge_lut_1_label': {
+            'zh': '选择LUT 1（主色卡）',
+            'en': 'Select LUT 1 (Primary)'
+        },
+        'merge_lut_2_label': {
+            'zh': '选择LUT 2（合并色卡）',
+            'en': 'Select LUT 2 (Secondary)'
+        },
+        'merge_secondary_modes': {
+            'zh': '已选副色卡',
+            'en': 'Selected Secondary LUTs'
+        },
+        'merge_secondary_none': {
+            'zh': '未选择副色卡',
+            'en': 'No secondary LUTs selected'
+        },
+        'merge_primary_hint': {
+            'zh': '💡 请先选择一个6色或8色的主色卡',
+            'en': '💡 Please select a 6-Color or 8-Color primary LUT first'
+        },
+        'merge_primary_not_high': {
+            'zh': '❌ 主色卡必须是6色或8色模式',
+            'en': '❌ Primary LUT must be 6-Color or 8-Color mode'
+        },
+        'merge_error_no_secondary': {
+            'zh': '❌ 请至少选择一个副色卡',
+            'en': '❌ Please select at least one secondary LUT'
+        },
+        'merge_mode_label': {
+            'zh': '检测到的模式',
+            'en': 'Detected Mode'
+        },
+        'merge_mode_unknown': {
+            'zh': '未选择',
+            'en': 'Not selected'
+        },
+        'merge_dedup_label': {
+            'zh': 'Delta-E 去重阈值',
+            'en': 'Delta-E Dedup Threshold'
+        },
+        'merge_dedup_info': {
+            'zh': '值越大去除的相近色越多，0=仅精确去重',
+            'en': 'Higher = remove more similar colors, 0 = exact dedup only'
+        },
+        'merge_btn': {
+            'zh': '🔀 执行合并',
+            'en': '🔀 Merge'
+        },
+        'merge_status_ready': {
+            'zh': '💡 选择两个LUT后点击合并',
+            'en': '💡 Select two LUTs then click Merge'
+        },
+        'merge_status_running': {
+            'zh': '⏳ 合并中...',
+            'en': '⏳ Merging...'
+        },
+        'merge_status_success': {
+            'zh': '✅ 合并完成！合并前: {before} 色 → 合并后: {after} 色（精确去重: {exact}，相近色去除: {similar}）\n保存至: {path}',
+            'en': '✅ Merge complete! Before: {before} → After: {after} (exact dupes: {exact}, similar removed: {similar})\nSaved to: {path}'
+        },
+        'merge_error_no_lut': {
+            'zh': '❌ 请选择至少两个LUT文件',
+            'en': '❌ Please select at least two LUT files'
+        },
+        'merge_error_same_lut': {
+            'zh': '❌ 请选择不同的LUT文件',
+            'en': '❌ Please select different LUT files'
+        },
+        'merge_error_incompatible': {
+            'zh': '❌ 不兼容的LUT组合: {msg}',
+            'en': '❌ Incompatible LUT combination: {msg}'
+        },
+        'merge_error_failed': {
+            'zh': '❌ 合并失败: {msg}',
+            'en': '❌ Merge failed: {msg}'
+        },
+        
         # ==================== About Page Content ====================
         'about_content': {
-            'zh': """## 🌟 Lumina Studio v1.5.6
+            'zh': """## 🌟 Lumina Studio v1.6.0
 
 **多材料3D打印色彩系统**
 
@@ -706,7 +999,28 @@ class I18n:
 
 ---
 
-### 📝 v1.5.6 更新日志
+### 📝 v1.6.0 更新日志
+
+#### 🧹 孤立像素清理
+- 新增孤立像素清理功能（高保真模式自动启用）
+- 智能检测并合并孤立色块，提升打印质量
+
+#### 🔧 代码质量改进
+- 替换所有裸异常捕获为 `except Exception`
+- 新增 Aliz PLA & PETG 4/6/8色 npy 预设
+
+---
+
+### 📝 v1.5.8 更新日志
+
+#### 🧹 代码清理
+- 移除融合LUT功能（简化用户体验）
+- 保留BW黑白模式功能
+- 清理.npz文件格式支持
+
+---
+
+### 📝 v1.5.7 更新日志
 
 #### 🔧 8色模式叠色效果修复
 - **核心修复**：修复8色模式图像转换时堆叠顺序错误导致的叠色效果不正确
@@ -814,10 +1128,10 @@ class I18n:
 
 <div style="text-align:center; color:#888; margin-top:20px;">
     Made with ❤️ by [MIN]<br>
-    v1.5.6 | 2025
+    v1.6.0 | 2025
 </div>
 """,
-            'en': """## 🌟 Lumina Studio v1.5.6
+            'en': """## 🌟 Lumina Studio v1.6.0
 
 **Multi-Material 3D Print Color System**
 
@@ -851,7 +1165,28 @@ Accurate color reproduction for FDM printing
 
 ---
 
-### 📝 v1.5.6 Changelog
+### 📝 v1.6.0 Changelog
+
+#### 🧹 Isolated Pixel Cleanup
+- Added isolated pixel cleanup feature (auto-enabled in High-Fidelity mode)
+- Smart detection and merging of isolated color blocks for better print quality
+
+#### 🔧 Code Quality Improvements
+- Replaced all bare except clauses with `except Exception`
+- Added Aliz PLA & PETG 4/6/8 color npy presets
+
+---
+
+### 📝 v1.5.8 Changelog
+
+#### 🧹 Code Cleanup
+- Removed merged LUT feature (simplified UX)
+- Kept BW black & white mode
+- Cleaned up .npz format support
+
+---
+
+### 📝 v1.5.7 Changelog
 
 #### 🔧 8-Color Mode Stacking Fix
 - **Core Fix**: Fixed incorrect stacking order in 8-color image conversion causing wrong color layering
@@ -959,7 +1294,7 @@ Special thanks to:
 
 <div style="text-align:center; color:#888; margin-top:20px;">
     Made with ❤️ by [MIN]<br>
-    v1.5.6 | 2025
+    v1.6.0 | 2025
 </div>
 """
         },
