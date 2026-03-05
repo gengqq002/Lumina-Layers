@@ -4197,6 +4197,9 @@ def create_converter_tab_content(lang: str, lang_state=None, theme_state=None) -
                             preview_cache, theme_is_dark):
         """Open file in slicer with auto-generation if needed."""
         
+        # Initialize color_recipe_path to avoid UnboundLocalError
+        color_recipe_path = None
+        
         # If no file exists, auto-generate the complete workflow
         if file_obj is None:
             print("[AUTO-SLICER] No 3MF file found, starting auto-generation workflow...")
@@ -4213,7 +4216,7 @@ def create_converter_tab_content(lang: str, lang_state=None, theme_state=None) -
                     print(f"[AUTO-SLICER] Preview generated: {status}")
                 except Exception as e:
                     print(f"[AUTO-SLICER] Failed to generate preview: {e}")
-                    return gr.update(), gr.update(), gr.update(), f"[ERROR] 预览生成失败: {e}"
+                    return gr.update(), gr.update(), gr.update(), gr.update(), f"[ERROR] 预览生成失败: {e}"
             
             # Step 2: Generate 3MF model
             print("[AUTO-SLICER] Step 2/2: Generating 3MF model...")
@@ -4232,14 +4235,14 @@ def create_converter_tab_content(lang: str, lang_state=None, theme_state=None) -
                 print(f"[AUTO-SLICER] 3MF generated: {status}")
             except Exception as e:
                 print(f"[AUTO-SLICER] Failed to generate 3MF: {e}")
-                return gr.update(), gr.update(), gr.update(), f"[ERROR] 3MF生成失败: {e}"
+                return gr.update(), gr.update(), gr.update(), gr.update(), f"[ERROR] 3MF生成失败: {e}"
         
         # Now open in slicer or download
         if slicer_id == "download":
             # Make file component visible so user can download
             if file_obj is not None:
-                return file_obj, gr.update(visible=True), gr.update(visible=True), gr.update(), "📥 请点击下方文件下载"
-            return None, gr.update(), gr.update(), gr.update(), "[ERROR] 没有可下载的文件"
+                return file_obj, gr.update(visible=True), color_recipe_path, gr.update(visible=True), "📥 请点击下方文件下载"
+            return None, gr.update(), gr.update(), gr.update(), gr.update(), "[ERROR] 没有可下载的文件"
         
         # Get actual file path from Gradio File object
         actual_path = None
@@ -4250,7 +4253,7 @@ def create_converter_tab_content(lang: str, lang_state=None, theme_state=None) -
                 actual_path = file_obj
         
         if not actual_path:
-            return None, gr.update(), gr.update(), gr.update(), "[ERROR] 生成失败，无法打开"
+            return None, gr.update(), gr.update(), gr.update(), gr.update(), "[ERROR] 生成失败，无法打开"
         
         status = open_in_slicer(actual_path, slicer_id)
         return file_obj, gr.update(), color_recipe_path, gr.update(), status
