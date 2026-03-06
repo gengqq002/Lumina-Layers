@@ -1440,6 +1440,16 @@ console.log('[CROP] Global scripts loaded, openCropModal:', typeof window.openCr
             new_cache_size = I18n.get('settings_cache_size', lang).format(_format_bytes(cache_size_after))
             return status_msg, new_cache_size
 
+        def on_clear_output(lang):
+            output_size_before = Stats.get_output_size()
+            _, _ = Stats.clear_output()
+            output_size_after = Stats.get_output_size()
+            freed_size = max(output_size_before - output_size_after, 0)
+
+            status_msg = I18n.get('settings_output_cleared', lang).format(_format_bytes(freed_size))
+            new_output_size = I18n.get('settings_output_size', lang).format(_format_bytes(output_size_after))
+            return status_msg, new_output_size
+
         def on_reset_counters(lang):
             Stats.reset_all()
             new_stats = Stats.get_all()
@@ -1459,6 +1469,12 @@ console.log('[CROP] Global scripts loaded, openCropModal:', typeof window.openCr
             fn=on_clear_cache,
             inputs=[lang_state],
             outputs=[components['md_settings_status'], components['md_cache_size']]
+        )
+
+        components['btn_clear_output'].click(
+            fn=on_clear_output,
+            inputs=[lang_state],
+            outputs=[components['md_settings_status'], components['md_output_size']]
         )
 
         components['btn_reset_counters'].click(
@@ -1599,6 +1615,13 @@ def _get_all_component_updates(lang: str, components: dict) -> list:
             continue
         if key == 'btn_clear_cache':
             updates.append(gr.update(value=I18n.get('settings_clear_cache', lang)))
+            continue
+        if key == 'md_output_size':
+            output_size = Stats.get_output_size()
+            updates.append(gr.update(value=I18n.get('settings_output_size', lang).format(_format_bytes(output_size))))
+            continue
+        if key == 'btn_clear_output':
+            updates.append(gr.update(value=I18n.get('settings_clear_output', lang)))
             continue
         if key == 'btn_reset_counters':
             updates.append(gr.update(value=I18n.get('settings_reset_counters', lang)))
@@ -4803,6 +4826,18 @@ def create_about_tab_content(lang: str) -> dict:
             variant="secondary",
             size="sm"
         )
+    
+    output_size = Stats.get_output_size()
+    output_size_str = _format_bytes(output_size)
+    components['md_output_size'] = gr.Markdown(
+        I18n.get('settings_output_size', lang).format(output_size_str)
+    )
+    components['btn_clear_output'] = gr.Button(
+        I18n.get('settings_clear_output', lang),
+        variant="secondary",
+        size="sm"
+    )
+    
     components['md_settings_status'] = gr.Markdown("")
     
     # About page content (from i18n)
