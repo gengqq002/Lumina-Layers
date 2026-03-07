@@ -200,50 +200,38 @@ class BambuStudio3MFWriter:
             f.write(rels_content)
     
     def _write_object_files(self, tmpdir: str):
-        """Write object_1.model - matching LD format (no UUIDs)"""
-        xml_lines = [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            '<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" unit="millimeter" xml:lang="en-US" requiredextensions="p">',
-            ' <resources>',
-        ]
-        
-        # Add ALL objects to the resources section (no UUIDs)
-        for idx, (mesh, name, color_rgb) in enumerate(self.objects, start=1):
-            xml_lines.append(f'  <object id="{idx}" type="model">')
-            xml_lines.append('   <mesh>')
-            xml_lines.append('    <vertices>')
-            
-            # Add vertices WITHOUT color
-            for vertex in mesh.vertices:
-                xml_lines.append(
-                    f'     <vertex x="{vertex[0]:.6f}" y="{vertex[1]:.6f}" z="{vertex[2]:.6f}"/>'
-                )
-            
-            xml_lines.append('    </vertices>')
-            xml_lines.append('    <triangles>')
-            
-            # Add triangles
-            for face in mesh.faces:
-                xml_lines.append(
-                    f'     <triangle v1="{face[0]}" v2="{face[1]}" v3="{face[2]}"/>'
-                )
-            
-            xml_lines.append('    </triangles>')
-            xml_lines.append('   </mesh>')
-            xml_lines.append('  </object>')
-        
-        xml_lines.extend([
-            ' </resources>',
-            ' <build/>',
-            '</model>',
-        ])
-        
-        xml_content = '\n'.join(xml_lines)
-        
-        # Write to object_1.model
+        """Write object_1.model using streaming I/O to handle large meshes."""
         output_path = os.path.join(tmpdir, '3D', 'Objects', 'object_1.model')
         with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(xml_content)
+            f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+            f.write('<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" unit="millimeter" xml:lang="en-US" requiredextensions="p">\n')
+            f.write(' <resources>\n')
+
+            for idx, (mesh, name, color_rgb) in enumerate(self.objects, start=1):
+                f.write(f'  <object id="{idx}" type="model">\n')
+                f.write('   <mesh>\n')
+                f.write('    <vertices>\n')
+
+                # Stream vertices using vectorized formatting
+                verts = mesh.vertices
+                for i in range(len(verts)):
+                    f.write(f'     <vertex x="{verts[i, 0]:.6f}" y="{verts[i, 1]:.6f}" z="{verts[i, 2]:.6f}"/>\n')
+
+                f.write('    </vertices>\n')
+                f.write('    <triangles>\n')
+
+                # Stream faces
+                fa = mesh.faces
+                for i in range(len(fa)):
+                    f.write(f'     <triangle v1="{fa[i, 0]}" v2="{fa[i, 1]}" v3="{fa[i, 2]}"/>\n')
+
+                f.write('    </triangles>\n')
+                f.write('   </mesh>\n')
+                f.write('  </object>\n')
+
+            f.write(' </resources>\n')
+            f.write(' <build/>\n')
+            f.write('</model>\n')
     
     def _write_single_object(self, tmpdir: str, obj_id: int, mesh: trimesh.Trimesh, name: str, color_rgb: tuple):
         """Write a single object .model file - matching BambuStudio format exactly"""

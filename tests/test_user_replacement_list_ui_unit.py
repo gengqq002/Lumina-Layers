@@ -247,10 +247,16 @@ def test_process_batch_generation_full_pipeline_replacement_regions_affect_previ
     def preview_value(preview_output):
         if isinstance(preview_output, dict) and preview_output.get('__type__') == 'update':
             return preview_output.get('value')
+        if hasattr(preview_output, 'shape'):
+            return preview_output
         return preview_output
 
     base_preview_value = preview_value(base_preview)
     assert base_preview_value is not None
+    # Ensure we have a real numpy array, not a mock
+    assert hasattr(base_preview_value, 'shape'), (
+        f"Expected numpy array for preview, got {type(base_preview_value)}"
+    )
 
     solid_mask = base_preview_value[:, :, 3] > 0
 

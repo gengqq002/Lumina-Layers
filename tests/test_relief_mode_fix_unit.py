@@ -10,14 +10,23 @@ Lumina Studio - UI 模式切换清除逻辑单元测试
 Requirements: 1.1, 1.2, 1.3
 """
 
-import gradio as gr
+import importlib
 import pytest
+
+
+def _real_gr():
+    """Import the real gradio module, bypassing any MagicMock pollution."""
+    import gradio
+    if hasattr(gradio.update, '__wrapped__') or not callable(getattr(gradio, 'update', None)):
+        importlib.reload(gradio)
+    return gradio
 
 
 # ---------- 复制自 ui/layout_new.py 的核心逻辑 ----------
 
 def on_height_mode_change(mode: str) -> tuple:
     """切换排列规则时，控制高度图上传区和一键生成按钮的显隐，并清除残留值。"""
+    gr = _real_gr()
     if mode == "根据高度图":
         return (
             gr.update(visible=True),    # row_conv_heightmap
@@ -36,6 +45,7 @@ def on_height_mode_change(mode: str) -> tuple:
 
 def on_relief_mode_toggle(enable_relief, selected_color, height_map, base_thickness) -> tuple:
     """Toggle relief mode visibility and reset state."""
+    gr = _real_gr()
     if not enable_relief:
         return (
             gr.update(visible=False),   # slider_conv_relief_height

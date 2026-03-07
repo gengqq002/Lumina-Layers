@@ -7,6 +7,14 @@ Lumina Studio - 高度图加载与处理模块 (Heightmap Loader)
 
 import numpy as np
 import cv2
+from PIL import Image as PILImage
+
+# HEIC/HEIF support (optional dependency)
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
 
 
 class HeightmapLoader:
@@ -157,6 +165,15 @@ class HeightmapLoader:
                 'warnings': [],
                 'error': f"❌ 无法读取高度图文件: {heightmap_path} ({e})"
             }
+        
+        # Fallback: cv2 can't decode HEIC/HEIF, use Pillow instead
+        if image is None:
+            try:
+                pil_img = PILImage.open(heightmap_path)
+                image = cv2.cvtColor(np.array(pil_img.convert('RGB')), cv2.COLOR_RGB2BGR)
+            except Exception:
+                pass
+        
         if image is None:
             return {
                 'success': False,

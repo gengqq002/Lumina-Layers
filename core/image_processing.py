@@ -13,6 +13,13 @@ from scipy.spatial import KDTree
 
 from config import PrinterConfig, ModelingMode, ColorSystem
 
+# HEIC/HEIF support (optional dependency)
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
+
 # SVG support (optional dependency)
 try:
     from svglib.svglib import svg2rlg
