@@ -796,6 +796,54 @@ PREVIEW_ZOOM_JS = """
 </script>
 """
 
+# 5-Color Combination click handler JS
+FIVECOLOR_CLICK_JS = """
+<style>
+.hidden-5color-btn {
+    position: absolute !important;
+    left: -9999px !important;
+    top: -9999px !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+</style>
+<script>
+(function() {
+    // 防止重复注入
+    if (window._5colorClickHandlerInjected) return;
+    window._5colorClickHandlerInjected = true;
+    
+    console.log('[5-Color] Injecting global click handler');
+    
+    // 使用事件委托监听所有颜色块点击
+    document.addEventListener('click', function(e) {
+        const colorBox = e.target.closest('.color-box-v2');
+        if (!colorBox) return;
+        
+        const idx = colorBox.getAttribute('data-color-idx');
+        if (idx === null) return;
+        
+        console.log('[5-Color] Color box clicked:', idx);
+        
+        // 查找并点击对应的隐藏按钮
+        const btn = document.getElementById('color-btn-' + idx + '-5color');
+        if (btn) {
+            console.log('[5-Color] Triggering button:', btn.id);
+            btn.click();
+        } else {
+            console.error('[5-Color] Button not found:', 'color-btn-' + idx + '-5color');
+        }
+    });
+    
+    console.log('[5-Color] Global click handler installed');
+})();
+</script>
+"""
+
 # ---------- Image size and aspect-ratio helpers ----------
 
 def _get_image_size(img):
@@ -1320,7 +1368,12 @@ console.log('[CROP] Global scripts loaded, openCropModal:', typeof window.openCr
                 components.update(merge_components)
             tab_components['tab_merge'] = tab_merge
             
-            with gr.TabItem(label=I18n.get('tab_about', "zh"), id=5) as tab_about:
+            with gr.TabItem(label="🎨 配色查询 | Color Query", id=5) as tab_5color:
+                from ui.fivecolor_tab_v2 import create_5color_tab_v2
+                create_5color_tab_v2("zh")
+            tab_components['tab_5color'] = tab_5color
+            
+            with gr.TabItem(label=I18n.get('tab_about', "zh"), id=6) as tab_about:
                 about_components = create_about_tab_content("zh")
                 components.update(about_components)
             tab_components['tab_about'] = tab_about
@@ -5024,6 +5077,347 @@ def create_advanced_tab_content(lang: str) -> dict:
     return components
 
 
+def create_5color_combination_tab(lang: str = "zh") -> dict:
+    """创建 5色组合查询标签页
+
+    从 8 个基础颜色中选择 5 次（可重复），查询对应的结果颜色。
+
+    Args:
+        lang: 界面语言，"zh" 或 "en"
+
+    Returns:
+        包含所有组件的字典
+    """
+    import json
+    components = {}
+
+    # 标题和描述
+    title_text = "### 🎨 5色组合查询" if lang == "zh" else "### 🎨 5-Color Query"
+    desc_text = "从 8 个基础颜色中选择 5 次（可重复），查询对应的结果颜色。" if lang == "zh" else "Select 5 times from 8 base colors (repeatable) to query the result color."
+
+    components['md_5color_title'] = gr.Markdown(title_text)
+    components['md_5color_desc'] = gr.Markdown(desc_text)
+
+    with gr.Row():
+        # 左侧：文件选择和控制
+        with gr.Column(scale=1):
+            # LUT 文件选择
+            with gr.Tabs():
+                with gr.TabItem("📁 上传" if lang == "zh" else "📁 Upload"):
+                    components['file_5color_lut'] = gr.File(
+                        label="上传 8 色 LUT 文件 (.npy)" if lang == "zh" else "Upload 8-Color LUT (.npy)",
+                        file_types=['.npy'],
+                        type='filepath'
+                    )
+
+                with gr.TabItem("📂 已有" if lang == "zh" else "📂 Existing"):
+                    lut_files = _get_available_8color_lut_files()
+                    components['dropdown_5color_lut'] = gr.Dropdown(
+                        label="选择 LUT" if lang == "zh" else "Select LUT",
+                        choices=lut_files,
+                        value=None
+                    )
+                    components['btn_refresh_lut'] = gr.Button(
+                        "🔄 刷新" if lang == "zh" else "🔄 Refresh",
+                        size="sm"
+                    )
+
+            # 状态显示
+            components['text_status'] = gr.Textbox(
+                label="状态" if lang == "zh" else "Status",
+                value="💡 请选择 LUT 文件" if lang == "zh" else "💡 Please select LUT file",
+                interactive=False,
+                lines=2
+            )
+
+            # 选择序列显示
+            components['text_sequence'] = gr.Textbox(
+                label="选择序列" if lang == "zh" else "Selection Sequence",
+                value="",
+                interactive=False,
+                lines=2,
+                placeholder="点击颜色进行选择..." if lang == "zh" else "Click colors to select..."
+            )
+
+            # 控制按钮
+            with gr.Row():
+                components['btn_clear'] = gr.Button(
+                    "🗑️ 清除" if lang == "zh" else "🗑️ Clear",
+                    size="sm"
+                )
+                components['btn_undo'] = gr.Button(
+                    "↩️ 撤销" if lang == "zh" else "↩️ Undo",
+                    size="sm"
+                )
+                components['btn_reverse'] = gr.Button(
+                    "🔄 反序" if lang == "zh" else "🔄 Reverse",
+                    size="sm"
+                )
+
+            components['btn_query'] = gr.Button(
+                "🔍 查询结果" if lang == "zh" else "🔍 Query Result",
+                variant="primary",
+                size="lg"
+            )
+
+        # 右侧：颜色选择器和结果
+        with gr.Column(scale=2):
+            # 8 个基础颜色选择器
+            components['html_base_colors'] = gr.HTML(
+                value=_generate_empty_base_colors_html(lang)
+            )
+
+            # 结果显示
+            components['md_result_title'] = gr.Markdown(
+                "### 查询结果" if lang == "zh" else "### Query Result"
+            )
+            components['html_result'] = gr.HTML(
+                value=_generate_empty_result_html(lang)
+            )
+
+    # 隐藏状态组件
+    components['state_lut_path'] = gr.Textbox(value="", visible=False)
+    components['state_selected'] = gr.Textbox(value="[]", visible=False)  # JSON list
+    components['state_color_click'] = gr.Textbox(value="", visible=False)  # 用于接收 JS 点击事件
+
+    # 事件处理函数
+    def on_load_lut(file_path):
+        """加载 LUT 文件"""
+        if not file_path:
+            return (
+                "💡 请选择 LUT 文件" if lang == "zh" else "💡 Please select LUT file",
+                _generate_empty_base_colors_html(lang),
+                "",
+                _generate_empty_result_html(lang),
+                "",
+                "[]"
+            )
+
+        try:
+            from core.five_color_combination import StackLUTLoader, ColorQueryEngine
+
+            # 加载 Stack LUT
+            stack_path = 'assets/smart_8color_stacks.npy'
+            success1, msg1, stack_data = StackLUTLoader.load_stack_lut(stack_path)
+            if not success1:
+                return (
+                    f"❌ {msg1}",
+                    _generate_empty_base_colors_html(lang),
+                    "",
+                    _generate_empty_result_html(lang),
+                    "",
+                    "[]"
+                )
+
+            # 加载 LUT RGB
+            success2, msg2, rgb_data = StackLUTLoader.load_lut_rgb(file_path)
+            if not success2:
+                return (
+                    f"❌ {msg2}",
+                    _generate_empty_base_colors_html(lang),
+                    "",
+                    _generate_empty_result_html(lang),
+                    "",
+                    "[]"
+                )
+
+            # 创建查询引擎
+            engine = ColorQueryEngine(stack_data, rgb_data)
+            base_colors = engine.get_base_colors()
+
+            # 生成基础颜色 HTML
+            base_html = _generate_base_colors_html(base_colors, lang)
+
+            status = f"✅ 已加载 {len(rgb_data)} 个颜色组合" if lang == "zh" else f"✅ Loaded {len(rgb_data)} combinations"
+
+            return (
+                status,
+                base_html,
+                "",
+                _generate_empty_result_html(lang),
+                file_path,
+                "[]"
+            )
+
+        except Exception as e:
+            return (
+                f"❌ 错误: {str(e)}",
+                _generate_empty_base_colors_html(lang),
+                "",
+                _generate_empty_result_html(lang),
+                "",
+                "[]"
+            )
+
+    def on_color_click(color_idx_str, lut_path, selected_json):
+        """处理颜色点击"""
+        if not color_idx_str or not lut_path:
+            return ("", selected_json, _generate_empty_result_html(lang))
+
+        try:
+            color_idx = int(color_idx_str)
+            selected = json.loads(selected_json) if selected_json else []
+
+            if len(selected) >= 5:
+                msg = "已选择 5 个颜色，请先清除或查询" if lang == "zh" else "5 colors selected, please clear or query"
+                return (_format_sequence(selected, lang), selected_json, _generate_error_result_html(msg, lang))
+
+            selected.append(color_idx)
+            new_json = json.dumps(selected)
+
+            return (
+                _format_sequence(selected, lang),
+                new_json,
+                _generate_empty_result_html(lang)
+            )
+
+        except Exception as e:
+            return (f"错误: {str(e)}", selected_json, _generate_empty_result_html(lang))
+
+    def on_clear():
+        """清除选择"""
+        return ("", "[]", _generate_empty_result_html(lang))
+
+    def on_undo(selected_json):
+        """撤销最后一次选择"""
+        try:
+            selected = json.loads(selected_json) if selected_json else []
+            if selected:
+                selected.pop()
+            new_json = json.dumps(selected)
+            return (_format_sequence(selected, lang), new_json, _generate_empty_result_html(lang))
+        except:
+            return ("", "[]", _generate_empty_result_html(lang))
+
+    def on_reverse(selected_json):
+        """反转选择"""
+        try:
+            selected = json.loads(selected_json) if selected_json else []
+            if len(selected) == 5:
+                selected.reverse()
+                new_json = json.dumps(selected)
+                return (_format_sequence(selected, lang), new_json)
+            else:
+                return (_format_sequence(selected, lang), selected_json)
+        except:
+            return ("", "[]")
+
+    def on_query(lut_path, selected_json):
+        """查询结果"""
+        if not lut_path:
+            msg = "请先加载 LUT 文件" if lang == "zh" else "Please load LUT file first"
+            return _generate_error_result_html(msg, lang)
+
+        try:
+            selected = json.loads(selected_json) if selected_json else []
+
+            if len(selected) != 5:
+                msg = f"请选择 5 次颜色（当前: {len(selected)}/5）" if lang == "zh" else f"Please select 5 colors (current: {len(selected)}/5)"
+                return _generate_error_result_html(msg, lang)
+
+            from core.five_color_combination import StackLUTLoader, ColorQueryEngine
+
+            # 加载数据
+            stack_path = 'assets/smart_8color_stacks.npy'
+            _, _, stack_data = StackLUTLoader.load_stack_lut(stack_path)
+            _, _, rgb_data = StackLUTLoader.load_lut_rgb(lut_path)
+
+            # 查询
+            engine = ColorQueryEngine(stack_data, rgb_data)
+            result = engine.query(selected)
+
+            return _generate_result_html(result, lang)
+
+        except Exception as e:
+            return _generate_error_result_html(f"错误: {str(e)}", lang)
+
+    # 绑定事件
+    components['file_5color_lut'].change(
+        fn=on_load_lut,
+        inputs=[components['file_5color_lut']],
+        outputs=[
+            components['text_status'],
+            components['html_base_colors'],
+            components['text_sequence'],
+            components['html_result'],
+            components['state_lut_path'],
+            components['state_selected']
+        ]
+    )
+
+    components['dropdown_5color_lut'].change(
+        fn=on_load_lut,
+        inputs=[components['dropdown_5color_lut']],
+        outputs=[
+            components['text_status'],
+            components['html_base_colors'],
+            components['text_sequence'],
+            components['html_result'],
+            components['state_lut_path'],
+            components['state_selected']
+        ]
+    )
+
+    components['btn_refresh_lut'].click(
+        fn=lambda: gr.update(choices=_get_available_8color_lut_files()),
+        outputs=[components['dropdown_5color_lut']]
+    )
+
+    components['state_color_click'].change(
+        fn=on_color_click,
+        inputs=[
+            components['state_color_click'],
+            components['state_lut_path'],
+            components['state_selected']
+        ],
+        outputs=[
+            components['text_sequence'],
+            components['state_selected'],
+            components['html_result']
+        ]
+    )
+
+    components['btn_clear'].click(
+        fn=on_clear,
+        outputs=[
+            components['text_sequence'],
+            components['state_selected'],
+            components['html_result']
+        ]
+    )
+
+    components['btn_undo'].click(
+        fn=on_undo,
+        inputs=[components['state_selected']],
+        outputs=[
+            components['text_sequence'],
+            components['state_selected'],
+            components['html_result']
+        ]
+    )
+
+    components['btn_reverse'].click(
+        fn=on_reverse,
+        inputs=[components['state_selected']],
+        outputs=[
+            components['text_sequence'],
+            components['state_selected']
+        ]
+    )
+
+    components['btn_query'].click(
+        fn=on_query,
+        inputs=[
+            components['state_lut_path'],
+            components['state_selected']
+        ],
+        outputs=[components['html_result']]
+    )
+
+    return components
+
+
+# 5色组合查询辅助函数
 def create_about_tab_content(lang: str) -> dict:
     """Build About tab content from i18n. Returns component dict."""
     components = {}
@@ -5075,3 +5469,192 @@ def _format_bytes(size_bytes: int) -> str:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024
     return f"{size_bytes:.1f} TB"
+
+
+# 5色组合查询辅助函数
+
+def _get_available_8color_lut_files():
+    """获取可用的 8 色 LUT 文件"""
+    import os
+    lut_files = []
+    
+    search_dirs = [
+        "lumina_luts",
+        "lut-npy预设",
+        "lut-npy预设/Custom",
+        "lut-npy预设/Preset",
+        "output"
+    ]
+    
+    for dir_name in search_dirs:
+        if os.path.exists(dir_name):
+            for root, dirs, files in os.walk(dir_name):
+                for file in files:
+                    if file.endswith('.npy'):
+                        full_path = os.path.join(root, file)
+                        try:
+                            # 检查是否是 8 色 LUT（2738 个颜色）
+                            data = np.load(full_path)
+                            if data.shape[0] == 2738 or (data.ndim == 3 and data.reshape(-1, 3).shape[0] == 2738):
+                                lut_files.append(full_path)
+                        except:
+                            pass
+    
+    lut_files.sort()
+    return lut_files if lut_files else ["(未找到 8 色 LUT 文件)"]
+
+
+def _format_sequence(selected, lang="zh"):
+    """格式化选择序列"""
+    if not selected:
+        return ""
+    
+    color_word = "颜色" if lang == "zh" else "Color"
+    count_text = f"{len(selected)} / 5"
+    sequence = " → ".join([f"{color_word}{i}" for i in selected])
+    
+    return f"[{count_text}] {sequence}"
+
+
+def _generate_empty_base_colors_html(lang="zh"):
+    """生成空的基础颜色 HTML"""
+    msg = "请先加载 LUT 文件" if lang == "zh" else "Please load LUT file first"
+    return f"""
+    <div style="padding: 20px; text-align: center; color: #666; border: 2px dashed #ddd; border-radius: 8px; min-height: 150px; display: flex; align-items: center; justify-content: center;">
+        <p>{msg}</p>
+    </div>
+    """
+
+
+def _generate_base_colors_html(base_colors, lang="zh"):
+    """生成 8 个基础颜色的 HTML"""
+    from core.five_color_combination import rgb_to_hex
+    
+    html = """
+    <style>
+    .base-colors-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+        padding: 15px;
+        background: #f9fafb;
+        border-radius: 8px;
+    }
+    .base-color-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        padding: 10px;
+        border-radius: 8px;
+        transition: all 0.2s;
+        background: white;
+        border: 2px solid #e5e7eb;
+    }
+    .base-color-item:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-color: #667eea;
+    }
+    .base-color-swatch {
+        width: 60px;
+        height: 60px;
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .base-color-info {
+        text-align: center;
+    }
+    .base-color-hex {
+        font-size: 12px;
+        font-family: monospace;
+        color: #374151;
+        font-weight: 600;
+    }
+    .base-color-index {
+        font-size: 11px;
+        color: #9ca3af;
+    }
+    </style>
+    <div class="base-colors-grid" id="base-colors-grid">
+    """
+    
+    for idx, rgb in enumerate(base_colors):
+        hex_color = rgb_to_hex(rgb)
+        html += f"""
+        <div class="base-color-item" onclick="window.selectColor{idx}()" id="color-item-{idx}">
+            <div class="base-color-swatch" style="background-color: {hex_color};"></div>
+            <div class="base-color-info">
+                <div class="base-color-hex">{hex_color}</div>
+                <div class="base-color-index">{"颜色" if lang == "zh" else "Color"} {idx}</div>
+            </div>
+        </div>
+        """
+    
+    html += """
+    </div>
+    """
+    
+    return html
+
+
+def _generate_empty_result_html(lang="zh"):
+    """生成空的结果 HTML"""
+    msg = "选择 5 次颜色后点击查询" if lang == "zh" else "Select 5 colors then click Query"
+    return f"""
+    <div style="padding: 20px; text-align: center; color: #666; border: 2px dashed #ddd; border-radius: 8px; min-height: 100px; display: flex; align-items: center; justify-content: center;">
+        <p>{msg}</p>
+    </div>
+    """
+
+
+def _generate_error_result_html(message, lang="zh"):
+    """生成错误结果 HTML"""
+    return f"""
+    <div style="padding: 20px; text-align: center; color: #dc2626; border: 2px solid #fecaca; background: #fef2f2; border-radius: 8px;">
+        <p style="margin: 0; font-weight: 600;">❌ {message}</p>
+    </div>
+    """
+
+
+def _generate_result_html(result, lang="zh"):
+    """生成查询结果 HTML"""
+    from core.five_color_combination import rgb_to_hex, format_selection_sequence
+    
+    if not result.found:
+        return _generate_error_result_html(result.message, lang)
+    
+    hex_color = rgb_to_hex(result.result_rgb)
+    r, g, b = result.result_rgb
+    sequence = format_selection_sequence(result.selected_indices)
+    
+    return f"""
+    <div style="padding: 20px; border: 2px solid #10b981; background: #f0fdf4; border-radius: 8px;">
+        <div style="text-align: center; margin-bottom: 15px;">
+            <div style="font-size: 18px; font-weight: 600; color: #065f46; margin-bottom: 10px;">
+                ✅ {"查询成功" if lang == "zh" else "Query Successful"}
+            </div>
+            <div style="font-size: 14px; color: #047857;">
+                {"行索引" if lang == "zh" else "Row Index"}: {result.row_index}
+            </div>
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 20px; justify-content: center;">
+            <div style="width: 100px; height: 100px; background-color: {hex_color}; border-radius: 12px; border: 2px solid rgba(0,0,0,0.1); box-shadow: 0 4px 8px rgba(0,0,0,0.15);"></div>
+            
+            <div style="text-align: left;">
+                <div style="font-size: 16px; font-family: monospace; font-weight: 600; color: #374151; margin-bottom: 5px;">
+                    {hex_color}
+                </div>
+                <div style="font-size: 14px; color: #6b7280;">
+                    RGB({r}, {g}, {b})
+                </div>
+                <div style="font-size: 12px; color: #9ca3af; margin-top: 10px;">
+                    {sequence}
+                </div>
+            </div>
+        </div>
+    </div>
+    """

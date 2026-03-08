@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║                          LUMINA STUDIO v1.6.3                                 ║
@@ -213,7 +215,7 @@ if __name__ == "__main__":
         app = create_app()
 
         try:
-            from ui.layout_new import HEADER_CSS, DEBOUNCE_JS
+            from ui.layout_new import HEADER_CSS, DEBOUNCE_JS, FIVECOLOR_CLICK_JS
             # Import crop extension for head JS injection
             from ui.crop_extension import get_crop_head_js
             
@@ -236,7 +238,7 @@ if __name__ == "__main__":
                 favicon_path=icon_path,
                 css=CUSTOM_CSS + HEADER_CSS,
                 theme=gr.themes.Soft(),
-                head=get_crop_head_js() + DEBOUNCE_JS
+                head=get_crop_head_js() + DEBOUNCE_JS + FIVECOLOR_CLICK_JS
             )
         except Exception as e:
             print(f"❌ Failed to launch Gradio app: {e}")
