@@ -61,7 +61,6 @@ export default function CalibrationPanel() {
         step={0.5}
         unit="mm"
         onChange={setBlockSize}
-        disabled={blockSizeDisabled}
       />
 
       <Slider
@@ -72,7 +71,6 @@ export default function CalibrationPanel() {
         step={0.01}
         unit="mm"
         onChange={setGap}
-        disabled={gapDisabled}
       />
 
       <Dropdown
@@ -119,7 +117,7 @@ export default function CalibrationPanel() {
           data-testid="preview-image"
           src={previewImageUrl}
           alt={t("cal_preview_alt")}
-          className="w-full rounded-md border border-gray-700"
+          className="w-full rounded-md border border-gray-300 dark:border-gray-700"
         />
       )}
     </aside>

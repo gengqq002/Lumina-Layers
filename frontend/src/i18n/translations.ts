@@ -366,7 +366,7 @@ export const translations: Record<string, Record<"zh" | "en", string>> = {
     en: "Enable Outline",
   },
   conv_outline_width: {
-    zh: "轮廓宽度(mm)",
+    zh: "外轮廓厚度(mm)",
     en: "Outline Width(mm)",
   },
   conv_cloisonne_section: {
@@ -1138,7 +1138,7 @@ export const translations: Record<string, Record<"zh" | "en", string>> = {
     en: "LUT Color Grid",
   },
   "widget.outlineSettings": {
-    zh: "轮廓设置",
+    zh: "外轮廓设置",
     en: "Outline Settings",
   },
   "widget.cloisonneSettings": {
@@ -1674,11 +1674,11 @@ export const translations: Record<string, Record<"zh" | "en", string>> = {
 
   // ==================== Outline Settings ====================
   outline_enable: {
-    zh: "启用描边",
+    zh: "启用外轮廓",
     en: "Enable Outline",
   },
   outline_width: {
-    zh: "描边宽度",
+    zh: "外轮廓厚度",
     en: "Outline Width",
   },
 
@@ -1919,6 +1919,22 @@ export const translations: Record<string, Record<"zh" | "en", string>> = {
     zh: "双击取消收藏",
     en: "Double-click to unfavorite",
   },
+  lut_grid_mode_swatch: {
+    zh: "色块",
+    en: "Swatch",
+  },
+  lut_grid_mode_card: {
+    zh: "色卡",
+    en: "Card",
+  },
+  lut_grid_card_a: {
+    zh: "色卡 A",
+    en: "Card A",
+  },
+  lut_grid_card_b: {
+    zh: "色卡 B",
+    en: "Card B",
+  },
 
   // ==================== Replace Confirmation ====================
   replace_confirm_btn: {
@@ -2148,5 +2164,11 @@ export const translations: Record<string, Record<"zh" | "en", string>> = {
   widget_collapse: {
     zh: "折叠",
     en: "Collapse",
+  },
+
+  // ==================== WikiTooltip ====================
+  wiki_tooltip_link: {
+    zh: "查看 Wiki 详情 ↗",
+    en: "View Wiki Details ↗",
   },
 };

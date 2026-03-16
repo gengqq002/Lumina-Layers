@@ -3,6 +3,7 @@ import { useThree, useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { useConverterStore } from "../stores/converterStore";
+import OutlineFrame3D from "./OutlineFrame3D";
 
 // ========== Exported pure utility functions (testable without Three.js) ==========
 
@@ -46,6 +47,8 @@ export interface InteractiveModelViewerProps {
   scaleY?: number;  // Y 方向缩放比例，默认 1.0
   spacerThick?: number;    // 底板厚度 (mm)，默认 1.2
   structureMode?: string;  // "Double-sided" | "Single-sided"
+  enableOutline?: boolean;   // 是否启用外轮廓预览，默认 false
+  outlineWidth?: number;     // 外轮廓厚度 (mm)，默认 2.0
 }
 
 /** Color layer thickness in mm (5 layers × 0.08mm). */
@@ -63,6 +66,8 @@ function InteractiveModelViewer({
   scaleY = 1,
   spacerThick = 1.2,
   structureMode = "Double-sided",
+  enableOutline = false,
+  outlineWidth = 2.0,
 }: InteractiveModelViewerProps) {
   const { scene } = useGLTF(url);
   const groupRef = useRef<THREE.Group>(null);
@@ -597,6 +602,13 @@ function InteractiveModelViewer({
       {colorMeshes.map((mesh) => (
         <primitive key={mesh.uuid} object={mesh} />
       ))}
+      {/* 外轮廓预览 */}
+      <OutlineFrame3D
+        enabled={enableOutline}
+        outlineWidth={outlineWidth}
+        backingPlateMesh={backingPlateMesh}
+        modelMaxZ={modelBounds?.maxZ ?? 0}
+      />
     </group>
   );
 }

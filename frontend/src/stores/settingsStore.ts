@@ -15,6 +15,7 @@ export interface SettingsState {
   lastSlicerId: string;
   enableBlur: boolean;
   enableFancyLoading: boolean;
+  paletteMode: "swatch" | "card";
 }
 
 // ========== Actions Interface ==========
@@ -30,6 +31,7 @@ export interface SettingsActions {
   setLastSlicerId: (id: string) => void;
   setEnableBlur: (enabled: boolean) => void;
   setEnableFancyLoading: (enabled: boolean) => void;
+  setPaletteMode: (mode: "swatch" | "card") => void;
   syncToBackend: () => Promise<void>;
 }
 
@@ -46,6 +48,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   lastSlicerId: "",
   enableBlur: true,
   enableFancyLoading: true,
+  paletteMode: "swatch",
 };
 
 // ========== Store ==========
@@ -75,6 +78,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
 
       setEnableFancyLoading: (enabled: boolean) => set({ enableFancyLoading: enabled }),
 
+      setPaletteMode: (mode: "swatch" | "card") => set({ paletteMode: mode }),
+
       syncToBackend: async () => {
         const state = get();
         try {
@@ -83,7 +88,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
             last_modeling_mode: state.lastModelingMode,
             last_color_mode: state.lastColorMode,
             last_slicer: state.lastSlicerId,
-            palette_mode: "swatch",
+            palette_mode: state.paletteMode,
             enable_crop_modal: state.cropEnabled,
           });
         } catch {

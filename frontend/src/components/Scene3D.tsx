@@ -86,6 +86,8 @@ function Scene3D({ modelUrl }: Scene3DProps) {
   const setSelectedColor = useConverterStore((s) => s.setSelectedColor);
   const spacerThick = useConverterStore((s) => s.spacer_thick);
   const structureMode = useConverterStore((s) => s.structure_mode);
+  const enableOutline = useConverterStore((s) => s.enable_outline);
+  const outlineWidth = useConverterStore((s) => s.outline_width);
 
   // Real-time scale dimensions
   const targetWidth = useConverterStore((s) => s.target_width_mm);
@@ -255,6 +257,8 @@ function Scene3D({ modelUrl }: Scene3DProps) {
               scaleY={scaleY}
               spacerThick={spacerThick}
               structureMode={structureMode}
+              enableOutline={enableOutline}
+              outlineWidth={outlineWidth}
             />
           </Suspense>
         ) : null}
