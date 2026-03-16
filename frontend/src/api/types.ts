@@ -100,6 +100,14 @@ export interface HeightmapUploadResponse {
   warnings: string[];
 }
 
+/** 自动检测推荐量化颜色数响应 */
+export interface AutoDetectColorsResponse {
+  recommended: number;
+  max_safe: number;
+  unique_colors: number;
+  complexity_score: number;
+}
+
 // ========== Response Models ==========
 
 /** 预览接口响应，包含 session_id 和预览图 URL */

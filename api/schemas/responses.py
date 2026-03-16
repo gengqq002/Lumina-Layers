@@ -169,6 +169,15 @@ class CropResponse(BaseModel):
     height: int
 
 
+class AutoDetectColorsResponse(BaseModel):
+    """自动检测推荐量化颜色数响应。"""
+
+    recommended: int
+    max_safe: int
+    unique_colors: int
+    complexity_score: int
+
+
 class ResetReplacementsResponse(BaseModel):
     """颜色替换重置响应。"""
 

@@ -33,6 +33,7 @@ from api.schemas.converter import (
     ResetReplacementsRequest,
 )
 from api.schemas.responses import (
+    AutoDetectColorsResponse,
     BatchItemResult,
     BatchResponse,
     ColorReplaceResponse,
@@ -141,6 +142,25 @@ def get_bed_preview(
 
     glb_id = registry.register_path("bed-preview", glb_path)
     return {"preview_3d_url": f"/api/files/{glb_id}"}
+
+
+@router.post("/auto-detect-colors", response_model=AutoDetectColorsResponse)
+async def auto_detect_colors(
+    image: UploadFile = File(..., description="输入图像"),
+    target_width_mm: float = Form(60.0, description="目标打印宽度（毫米）"),
+) -> AutoDetectColorsResponse:
+    """分析图片，自动推荐最佳量化颜色数。"""
+    temp_path = await upload_to_tempfile(image)
+    try:
+        result = ImagePreprocessor.analyze_recommended_colors(temp_path, target_width_mm)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"颜色分析失败: {e}")
+    return AutoDetectColorsResponse(
+        recommended=result.get("recommended", 48),
+        max_safe=result.get("max_safe", 64),
+        unique_colors=result.get("unique_colors", 0),
+        complexity_score=result.get("complexity_score", 0),
+    )
 
 
 @router.post("/crop", response_model=CropResponse)
