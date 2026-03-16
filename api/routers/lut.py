@@ -150,6 +150,7 @@ def merge_luts_endpoint(request: MergeRequest) -> MergeResponse:
         entries = [(primary_rgb, primary_stacks, primary_mode)]
         all_modes: list[str] = [primary_mode]
         all_paths: list[str] = [primary_path]  # 记录所有输入路径，用于判断输出格式
+        all_names: list[str] = [request.primary_name]  # 记录来源 LUT 显示名称
 
         # 5. Load each secondary, skip Merged / 加载辅助 LUT，跳过 Merged
         for sec_name in request.secondary_names:
@@ -165,6 +166,7 @@ def merge_luts_endpoint(request: MergeRequest) -> MergeResponse:
             entries.append((sec_rgb, sec_stacks, sec_mode))
             all_modes.append(sec_mode)
             all_paths.append(sec_path)
+            all_names.append(sec_name)
 
         # 6. Need at least 2 entries / 至少需要 2 个有效条目
         if len(entries) < 2:
@@ -193,6 +195,7 @@ def merge_luts_endpoint(request: MergeRequest) -> MergeResponse:
         merged_rgb, merged_stacks, stats = LUTMerger.merge_luts(
             entries, dedup_threshold=request.dedup_threshold,
             metadata_list=metadata_list,
+            source_names=all_names,
         )
 
         # 9. Save to Custom dir / 保存到 Custom 目录
@@ -210,7 +213,11 @@ def merge_luts_endpoint(request: MergeRequest) -> MergeResponse:
             if merged_metadata is None:
                 # 回退：使用主 LUT 的 metadata
                 _, _, merged_metadata = LUTManager.load_lut_with_metadata(primary_path)
-            LUTManager.save_keyed_json(output_path, merged_rgb, merged_stacks, merged_metadata)
+            entry_sources = stats.get("entry_sources")
+            LUTManager.save_keyed_json(
+                output_path, merged_rgb, merged_stacks, merged_metadata,
+                sources=entry_sources,
+            )
         else:
             LUTMerger.save_merged_lut(merged_rgb, merged_stacks, output_path)
 

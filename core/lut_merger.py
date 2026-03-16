@@ -487,7 +487,7 @@ class LUTMerger:
         return remap
 
     @staticmethod
-    def merge_luts(lut_entries, dedup_threshold=3.0, metadata_list=None, output_path=None):
+    def merge_luts(lut_entries, dedup_threshold=3.0, metadata_list=None, output_path=None, source_names=None):
         """执行LUT合并，支持可选的元数据集成。
         Execute LUT merge with optional metadata integration.
 
@@ -498,11 +498,13 @@ class LUTMerger:
                 (每个 LUT 条目的可选元数据)
             output_path (str | None): Optional output path; if provided, saves merged .npz
                 with metadata. (可选输出路径；若提供则保存含元数据的 .npz)
+            source_names (list[str] | None): Optional display names for each LUT entry,
+                used to tag every merged entry with its origin LUT.
+                (每个 LUT 条目的显示名称，用于标记合并后每条记录的来源)
 
         Returns:
             (merged_rgb[M,3], merged_stacks[M,L], stats_dict) where L is layer_count.
-            stats_dict includes 'warnings' and 'merged_metadata' keys when metadata_list
-            is provided.
+            stats_dict includes 'warnings', 'merged_metadata', and 'entry_sources' keys.
         """
         if not lut_entries:
             raise ValueError("No LUT entries to merge")
@@ -560,27 +562,38 @@ class LUTMerger:
             )
 
         # 1. 按色彩模式优先级排序（高优先级在前）
-        sorted_entries = sorted(
-            lut_entries,
-            key=lambda e: _MODE_PRIORITY.get(e[2], 0),
+        # 同时保持 source_names 的对应关系
+        indexed_entries = list(enumerate(lut_entries))
+        indexed_entries.sort(
+            key=lambda ie: _MODE_PRIORITY.get(ie[1][2], 0),
             reverse=True
         )
+        sorted_entries = [ie[1] for ie in indexed_entries]
+        sorted_source_names = (
+            [source_names[ie[0]] for ie in indexed_entries]
+            if source_names
+            else [f"LUT-{ie[0]}" for ie in indexed_entries]
+        )
 
-        # 2. 拼接所有数据，同时记录每个颜色的来源模式
+        # 2. 拼接所有数据，同时记录每个颜色的来源模式和来源名称
         all_rgb = []
         all_stacks = []
         all_modes = []
-        for rgb, stacks, mode in sorted_entries:
+        all_sources = []
+        for entry_idx, (rgb, stacks, mode) in enumerate(sorted_entries):
+            src_name = sorted_source_names[entry_idx]
             for i in range(rgb.shape[0]):
                 all_rgb.append(tuple(rgb[i]))
                 all_stacks.append(tuple(stacks[i]))
                 all_modes.append(mode)
+                all_sources.append(src_name)
 
         # 3. 精确去重（相同RGB值，保留优先级高的，即排在前面的）
         seen_rgb = {}
         unique_rgb = []
         unique_stacks = []
         unique_modes = []
+        unique_sources = []
         exact_dupes = 0
 
         for i in range(len(all_rgb)):
@@ -592,6 +605,7 @@ class LUTMerger:
                 unique_rgb.append(all_rgb[i])
                 unique_stacks.append(all_stacks[i])
                 unique_modes.append(all_modes[i])
+                unique_sources.append(all_sources[i])
 
         # 4. Delta-E 相近色去除
         similar_removed = 0
@@ -622,6 +636,7 @@ class LUTMerger:
             unique_rgb = [unique_rgb[i] for i in kept_indices]
             unique_stacks = [unique_stacks[i] for i in kept_indices]
             unique_modes = [unique_modes[i] for i in kept_indices]
+            unique_sources = [unique_sources[i] for i in kept_indices]
 
         merged_rgb = np.array(unique_rgb, dtype=np.uint8)
         merged_stacks = np.array(unique_stacks, dtype=np.int32)
@@ -633,6 +648,7 @@ class LUTMerger:
             'similar_removed': similar_removed,
             'warnings': warnings_list,
             'merged_metadata': merged_metadata,
+            'entry_sources': unique_sources,
         }
 
         # Save with metadata if output_path provided

@@ -522,7 +522,8 @@ class LUTManager:
 
     @classmethod
     def save_keyed_json(cls, path: str, rgb: np.ndarray, stacks: np.ndarray,
-                        metadata: LUTMetadata, lab: np.ndarray | None = None) -> None:
+                        metadata: LUTMetadata, lab: np.ndarray | None = None,
+                        sources: list[str] | None = None) -> None:
         """Save LUT data as Keyed JSON format.
         将 LUT 数据保存为 Keyed JSON 格式。
 
@@ -533,6 +534,8 @@ class LUTManager:
             metadata (LUTMetadata): LUT metadata. (LUT 元数据)
             lab (np.ndarray | None): Optional Lab array (N, 3). If None, convert from RGB.
                                      (可选 Lab 数组，为 None 时从 RGB 转换)
+            sources (list[str] | None): Optional per-entry source labels (e.g. origin LUT name).
+                                        (可选的每条记录来源标识)
         """
         meta_dict = metadata.to_dict()
 
@@ -585,6 +588,10 @@ class LUTManager:
                 entry["recipe"] = recipe_names
             else:
                 entry["recipe"] = []
+
+            # Source label (origin LUT name for merged entries)
+            if sources and i < len(sources):
+                entry["source"] = sources[i]
 
             entries.append(entry)
 

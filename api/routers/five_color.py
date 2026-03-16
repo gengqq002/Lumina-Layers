@@ -32,6 +32,20 @@ _engine_cache: dict[str, ColorQueryEngine] = {}
 _engine_cache_lock = threading.Lock()
 
 
+def _extract_sources_from_keyed_json(json_path: str) -> list[str]:
+    """Extract per-entry 'source' fields from a Keyed JSON LUT file.
+    从 Keyed JSON LUT 文件中提取每条记录的 source 字段。
+    """
+    import json as _json
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        entries = data.get("entries", [])
+        return [e.get("source", "") if isinstance(e, dict) else "" for e in entries]
+    except Exception:
+        return []
+
+
 def _load_engine(lut_name: str) -> tuple[ColorQueryEngine, str]:
     """Load a LUT and create a ColorQueryEngine (with in-memory cache).
     加载 LUT 并创建 ColorQueryEngine（带内存缓存）。
@@ -69,8 +83,11 @@ def _load_engine(lut_name: str) -> tuple[ColorQueryEngine, str]:
                 raise HTTPException(status_code=500, detail="Failed to load JSON LUT: no RGB data")
             # Use palette names for color_count
             color_count = len(metadata.palette) if metadata.palette else None
+            # Extract per-entry sources from JSON
+            sources = _extract_sources_from_keyed_json(path)
             engine = ColorQueryEngine(
                 stack_lut=stack_data, lut_rgb=rgb_data, color_count=color_count,
+                sources=sources,
             )
             # Override base_colors from palette hex_color
             if metadata.palette:
