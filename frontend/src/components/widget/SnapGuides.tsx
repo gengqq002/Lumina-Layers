@@ -13,9 +13,10 @@ interface SnapGuidesProps {
   isDraggingRef: RefObject<boolean>;
   dragPositionRef: RefObject<{ x: number; y: number } | null>;
   containerRef: RefObject<HTMLDivElement | null>;
+  insertPreview?: { edge: 'left' | 'right'; lineY: number } | null;
 }
 
-export function SnapGuides({ isDraggingRef, dragPositionRef, containerRef }: SnapGuidesProps) {
+export function SnapGuides({ isDraggingRef, dragPositionRef, containerRef, insertPreview }: SnapGuidesProps) {
   const [guides, setGuides] = useState<{ nearLeft: boolean; nearRight: boolean }>({
     nearLeft: false,
     nearRight: false,
@@ -46,7 +47,12 @@ export function SnapGuides({ isDraggingRef, dragPositionRef, containerRef }: Sna
     return () => cancelAnimationFrame(rafId);
   }, [isDraggingRef, dragPositionRef, containerRef]);
 
-  if (!guides.nearLeft && !guides.nearRight) return null;
+  if (!guides.nearLeft && !guides.nearRight && !insertPreview) return null;
+
+  const containerWidth = containerRef.current?.getBoundingClientRect().width ?? 0;
+  const previewLineLeft = insertPreview?.edge === 'left'
+    ? 0
+    : Math.max(0, containerWidth - WIDGET_WIDTH);
 
   return (
     <div className="absolute inset-0 z-20 pointer-events-none">
@@ -58,6 +64,18 @@ export function SnapGuides({ isDraggingRef, dragPositionRef, containerRef }: Sna
       {guides.nearRight && (
         <div
           className="absolute right-0 top-0 bottom-0 w-0.5 bg-blue-400/60 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+        />
+      )}
+      {insertPreview && (
+        <div
+          className="absolute"
+          style={{
+            top: Math.max(0, insertPreview.lineY) - 4,
+            left: previewLineLeft,
+            width: WIDGET_WIDTH,
+            height: 8,
+            background: 'linear-gradient(to bottom, transparent, rgba(96,165,250,0.25), transparent)',
+          }}
         />
       )}
     </div>

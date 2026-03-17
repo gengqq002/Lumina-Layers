@@ -442,6 +442,31 @@ export const useWidgetStore = create<WidgetStore>()(
       },
 
       /**
+       * Atomically snap dragged widget and reorder target edge stack.
+       * 原子化执行吸附与重排，避免中间态导致的错误动画。
+       */
+      snapAndReorder: (id: WidgetId, edge: "left" | "right", orderedIds: WidgetId[]) => {
+        set((state) => {
+          const updated = { ...state.widgets };
+
+          orderedIds.forEach((wid, index) => {
+            if (!updated[wid]) return;
+            updated[wid] = {
+              ...updated[wid],
+              snapEdge: edge,
+              stackOrder: index,
+            };
+          });
+
+          if (updated[id] && !orderedIds.includes(id)) {
+            updated[id] = { ...updated[id], snapEdge: edge };
+          }
+
+          return { widgets: updated };
+        });
+      },
+
+      /**
        * Toggle ColorWorkstation collapsed state.
        * 切换 ColorWorkstation 展开/收起状态。
        */

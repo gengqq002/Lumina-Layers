@@ -55,6 +55,7 @@ export interface WidgetStore {
 
   // 堆叠管理
   reorderStack: (edge: 'left' | 'right', orderedIds: WidgetId[]) => void;
+  snapAndReorder: (id: WidgetId, edge: 'left' | 'right', orderedIds: WidgetId[]) => void;
 
   // ColorWorkstation 展开/收起
   colorWorkstationCollapsed: boolean;

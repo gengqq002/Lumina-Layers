@@ -8,7 +8,7 @@
  * 在拖拽结束时计算吸附，并管理 z-index 分层以与 Three.js 共存。
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -20,7 +20,6 @@ import type {
   DragStartEvent,
   DragMoveEvent,
   DragEndEvent,
-  DragCancelEvent,
 } from '@dnd-kit/core';
 import { useWidgetStore, WIDGET_REGISTRY, TAB_WIDGET_MAP } from '../../stores/widgetStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -64,6 +63,15 @@ const WIDGET_CONTENT_MAP: Record<WidgetId, ComponentType> = {
   'five-color': FiveColorWidgetContent,
 };
 
+const DOCK_SCROLL_WIDTH = WIDGET_WIDTH + 16;
+
+interface InsertPreviewState {
+  edge: 'left' | 'right';
+  lineY: number;
+  upperId: WidgetId | null;
+  lowerId: WidgetId | null;
+}
+
 interface WidgetWorkspaceProps {
   children?: ReactNode; // CenterCanvas (Three.js)
 }
@@ -71,12 +79,12 @@ interface WidgetWorkspaceProps {
 export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
   const { t } = useI18n();
   const moveWidget = useWidgetStore((s) => s.moveWidget);
-  const snapToEdge = useWidgetStore((s) => s.snapToEdge);
-  const reorderStack = useWidgetStore((s) => s.reorderStack);
+  const snapAndReorder = useWidgetStore((s) => s.snapAndReorder);
   const setDragging = useWidgetStore((s) => s.setDragging);
   const isDragging = useWidgetStore((s) => s.isDragging);
   const activeWidgetId = useWidgetStore((s) => s.activeWidgetId);
   const activeTab = useWidgetStore((s) => s.activeTab);
+  const widgets = useWidgetStore((s) => s.widgets);
 
   // Filter registry to only show widgets for the active tab
   const activeWidgetIds = TAB_WIDGET_MAP[activeTab];
@@ -86,8 +94,13 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
   useConverterDataInit();
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const leftDockRef = useRef<HTMLDivElement>(null);
+  const rightDockRef = useRef<HTMLDivElement>(null);
   const dragPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const dragSourceRef = useRef<{ edge: 'left' | 'right'; scrollTop: number } | null>(null);
   const isDraggingRef = useRef(false);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [insertPreview, setInsertPreview] = useState<InsertPreviewState | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -209,12 +222,110 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
     }
   }, []);
 
+  // Keep a live workspace width snapshot for right-dock local positioning.
+  useEffect(() => {
+    const updateWidth = () => {
+      const width = containerRef.current?.getBoundingClientRect().width ?? 0;
+      setContainerWidth(width);
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  const leftRegistry = activeRegistry.filter((config) => widgets[config.id].snapEdge !== 'right');
+  const rightRegistry = activeRegistry.filter((config) => widgets[config.id].snapEdge === 'right');
+
+  const stackHeight = (edge: 'left' | 'right') => {
+    const stackWidgets = activeWidgetIds
+      .map((id) => widgets[id])
+      .filter((w) => w.visible && (edge === 'left' ? w.snapEdge !== 'right' : w.snapEdge === 'right'))
+      .sort((a, b) => a.stackOrder - b.stackOrder);
+    if (stackWidgets.length === 0) return 0;
+    return stackWidgets.reduce(
+      (sum, w) => sum + (w.collapsed ? COLLAPSED_HEIGHT : (w.expandedHeight ?? EXPANDED_HEIGHT)) + STACK_GAP,
+      STACK_GAP
+    );
+  };
+
+  const leftStackHeight = stackHeight('left');
+  const rightStackHeight = stackHeight('right');
+  const rightDockOffset = Math.max(0, (containerWidth || window.innerWidth) - WIDGET_WIDTH);
+
+  const getDockScrollTop = useCallback((edge: 'left' | 'right') => {
+    return edge === 'left'
+      ? (leftDockRef.current?.scrollTop ?? 0)
+      : (rightDockRef.current?.scrollTop ?? 0);
+  }, []);
+
+  const toEdgeContentY = useCallback(
+    (globalDropY: number, targetEdge: 'left' | 'right') => {
+      const sourceScrollTop = dragSourceRef.current?.scrollTop ?? 0;
+      const targetScrollTop = getDockScrollTop(targetEdge);
+      return Math.max(0, globalDropY - sourceScrollTop + targetScrollTop);
+    },
+    [getDockScrollTop]
+  );
+
+  const computeInsertion = useCallback(
+    (draggedId: WidgetId, targetEdge: 'left' | 'right', contentDropY: number) => {
+      const state = useWidgetStore.getState();
+      const currentTabIds = TAB_WIDGET_MAP[state.activeTab];
+      const siblings = currentTabIds
+        .map((wid) => state.widgets[wid])
+        .filter((w) => w.snapEdge === targetEdge && w.visible && w.id !== draggedId)
+        .sort((a, b) => a.stackOrder - b.stackOrder);
+
+      const orderedIds: WidgetId[] = [];
+      let inserted = false;
+      let lineY = STACK_GAP / 2;
+      let upperId: WidgetId | null = null;
+      let lowerId: WidgetId | null = siblings[0]?.id ?? null;
+      let prevId: WidgetId | null = null;
+      let accY = STACK_GAP;
+
+      for (const sibling of siblings) {
+        const h = sibling.collapsed
+          ? COLLAPSED_HEIGHT
+          : (sibling.expandedHeight ?? EXPANDED_HEIGHT);
+        const midpoint = accY + h / 2;
+
+        if (!inserted && contentDropY < midpoint) {
+          orderedIds.push(draggedId);
+          inserted = true;
+          upperId = prevId;
+          lowerId = sibling.id;
+          lineY = Math.max(0, accY - STACK_GAP / 2);
+        }
+
+        orderedIds.push(sibling.id);
+        prevId = sibling.id;
+        accY += h + STACK_GAP;
+      }
+
+      if (!inserted) {
+        orderedIds.push(draggedId);
+        upperId = prevId;
+        lowerId = null;
+        lineY = Math.max(0, accY - STACK_GAP / 2);
+      }
+
+      return { orderedIds, lineY, upperId, lowerId };
+    },
+    []
+  );
+
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
+      const id = event.active.id as WidgetId;
+      const widget = useWidgetStore.getState().widgets[id];
+      const sourceEdge = widget?.snapEdge === 'right' ? 'right' : 'left';
+      dragSourceRef.current = { edge: sourceEdge, scrollTop: getDockScrollTop(sourceEdge) };
+      setInsertPreview(null);
       isDraggingRef.current = true;
-      setDragging(true, event.active.id as WidgetId);
+      setDragging(true, id);
     },
-    [setDragging]
+    [setDragging, getDockScrollTop]
   );
 
   const handleDragMove = useCallback(
@@ -223,13 +334,37 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
       const id = active.id as WidgetId;
       const widget = useWidgetStore.getState().widgets[id];
       if (widget) {
-        dragPositionRef.current = {
-          x: widget.position.x + delta.x,
-          y: widget.position.y + delta.y,
-        };
+        const newX = widget.position.x + delta.x;
+        const newY = widget.position.y + delta.y;
+        dragPositionRef.current = { x: newX, y: newY };
+
+        const width = containerRef.current?.getBoundingClientRect().width ?? containerWidth;
+        const snap = computeSnap(newX, newX + WIDGET_WIDTH, width, newY);
+        const targetEdge = snap.edge ?? 'left';
+        const contentDropY = toEdgeContentY(newY, targetEdge);
+        const insertion = computeInsertion(id, targetEdge, contentDropY);
+        const visualLineY = Math.max(0, insertion.lineY - getDockScrollTop(targetEdge));
+
+        setInsertPreview((prev) => {
+          if (
+            prev &&
+            prev.edge === targetEdge &&
+            prev.lineY === visualLineY &&
+            prev.upperId === insertion.upperId &&
+            prev.lowerId === insertion.lowerId
+          ) {
+            return prev;
+          }
+          return {
+            edge: targetEdge,
+            lineY: visualLineY,
+            upperId: insertion.upperId,
+            lowerId: insertion.lowerId,
+          };
+        });
       }
     },
-    []
+    [containerWidth, toEdgeContentY, computeInsertion, getDockScrollTop]
   );
 
   const handleDragEnd = useCallback(
@@ -260,52 +395,15 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
       );
 
       const targetEdge = snap.edge!;
+      const contentDropY = toEdgeContentY(newY, targetEdge);
+      const insertion = computeInsertion(id, targetEdge, contentDropY);
 
       // First, move widget to the actual drop position (position + delta).
       // This gives framer-motion the correct starting point for the snap
       // animation. recalculateStacks (next frame) will update to the final
       // stacked position, producing a smooth visual transition.
       moveWidget(id, { x: newX, y: newY });
-      snapToEdge(id, targetEdge);
-
-      // Determine correct insertion position based on drop Y coordinate.
-      // Get all sibling widgets on the target edge (same tab, excluding self),
-      // sorted by their current stackOrder, then find where the dragged
-      // widget should be inserted based on the drop Y position.
-      const freshState = useWidgetStore.getState();
-      const currentTabIds = TAB_WIDGET_MAP[freshState.activeTab];
-      const siblings = currentTabIds
-        .map((wid) => freshState.widgets[wid])
-        .filter((w) => w.snapEdge === targetEdge && w.visible && w.id !== id)
-        .sort((a, b) => a.stackOrder - b.stackOrder);
-
-      // Build ordered ID list with the dragged widget inserted at the
-      // correct position based on drop Y vs each sibling's midpoint.
-      const dropY = Math.max(0, newY);
-      const orderedIds: WidgetId[] = [];
-      let inserted = false;
-
-      // Accumulate Y to find each sibling's vertical midpoint in the stack
-      let accY = STACK_GAP;
-      for (const sibling of siblings) {
-        const h = sibling.collapsed
-          ? COLLAPSED_HEIGHT
-          : (sibling.expandedHeight ?? EXPANDED_HEIGHT);
-        const midpoint = accY + h / 2;
-
-        if (!inserted && dropY < midpoint) {
-          orderedIds.push(id);
-          inserted = true;
-        }
-        orderedIds.push(sibling.id);
-        accY += h + STACK_GAP;
-      }
-
-      if (!inserted) {
-        orderedIds.push(id);
-      }
-
-      reorderStack(targetEdge, orderedIds);
+      snapAndReorder(id, targetEdge, insertion.orderedIds);
 
       // Reset isDraggingRef BEFORE scheduling recalculateStacks so the
       // ResizeObserver guard won't block the recalculation.
@@ -314,15 +412,19 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
 
       setDragging(false);
       dragPositionRef.current = null;
+      dragSourceRef.current = null;
+      setInsertPreview(null);
     },
-    [moveWidget, snapToEdge, reorderStack, setDragging, recalculateStacks]
+    [moveWidget, snapAndReorder, setDragging, recalculateStacks, toEdgeContentY, computeInsertion]
   );
 
   const handleDragCancel = useCallback(
-    (_event: DragCancelEvent) => {
+    () => {
       isDraggingRef.current = false;
       setDragging(false);
       dragPositionRef.current = null;
+      dragSourceRef.current = null;
+      setInsertPreview(null);
     },
     [setDragging]
   );
@@ -351,18 +453,57 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
             isDraggingRef={isDraggingRef}
             dragPositionRef={dragPositionRef}
             containerRef={containerRef}
+            insertPreview={insertPreview ? { edge: insertPreview.edge, lineY: insertPreview.lineY } : null}
           />
 
-          {/* Widget Layer — z-30 */}
-          <div className="absolute inset-0 z-30" style={{ pointerEvents: 'none' }}>
-            {activeRegistry.map((config) => {
-              const ContentComponent = WIDGET_CONTENT_MAP[config.id];
-              return (
-                <WidgetPanel key={config.id} widgetId={config.id} titleKey={config.titleKey}>
-                  <ContentComponent />
-                </WidgetPanel>
-              );
-            })}
+          {/* Left Dock Layer — z-30 */}
+          <div
+            ref={leftDockRef}
+            className="dock-scrollbar absolute inset-y-0 left-0 z-30 overflow-y-auto overflow-x-hidden"
+            style={{ width: DOCK_SCROLL_WIDTH, pointerEvents: 'none' }}
+          >
+            <div className="relative min-h-full" style={{ height: leftStackHeight }}>
+              {leftRegistry.map((config) => {
+                const ContentComponent = WIDGET_CONTENT_MAP[config.id];
+                return (
+                  <WidgetPanel
+                    key={config.id}
+                    widgetId={config.id}
+                    titleKey={config.titleKey}
+                    dockOffsetX={0}
+                    highlightTopEdge={insertPreview?.edge === 'left' && insertPreview.lowerId === config.id}
+                    highlightBottomEdge={insertPreview?.edge === 'left' && insertPreview.upperId === config.id}
+                  >
+                    <ContentComponent />
+                  </WidgetPanel>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right Dock Layer — z-30 */}
+          <div
+            ref={rightDockRef}
+            className="dock-scrollbar absolute inset-y-0 right-0 z-30 overflow-y-auto overflow-x-hidden"
+            style={{ width: DOCK_SCROLL_WIDTH, pointerEvents: 'none' }}
+          >
+            <div className="relative min-h-full" style={{ height: rightStackHeight }}>
+              {rightRegistry.map((config) => {
+                const ContentComponent = WIDGET_CONTENT_MAP[config.id];
+                return (
+                  <WidgetPanel
+                    key={config.id}
+                    widgetId={config.id}
+                    titleKey={config.titleKey}
+                    dockOffsetX={rightDockOffset}
+                    highlightTopEdge={insertPreview?.edge === 'right' && insertPreview.lowerId === config.id}
+                    highlightBottomEdge={insertPreview?.edge === 'right' && insertPreview.upperId === config.id}
+                  >
+                    <ContentComponent />
+                  </WidgetPanel>
+                );
+              })}
+            </div>
           </div>
 
           {/* DragOverlay — z-40 */}

@@ -68,6 +68,9 @@ interface WidgetPanelProps {
   widgetId: WidgetId;
   titleKey: string;
   children: ReactNode;
+  dockOffsetX?: number;
+  highlightTopEdge?: boolean;
+  highlightBottomEdge?: boolean;
 }
 
 /**
@@ -87,6 +90,9 @@ export const WidgetPanel = React.memo(function WidgetPanel({
   widgetId,
   titleKey,
   children,
+  dockOffsetX = 0,
+  highlightTopEdge = false,
+  highlightBottomEdge = false,
 }: WidgetPanelProps) {
   const widget = useWidgetStore((s) => s.widgets[widgetId]);
   const toggleCollapse = useWidgetStore((s) => s.toggleCollapse);
@@ -130,7 +136,10 @@ export const WidgetPanel = React.memo(function WidgetPanel({
   if (!widget.visible) return null;
 
   const isBeingDragged = activeWidgetId === widgetId && !!transform;
-  const targetHeight = widget.collapsed ? COLLAPSED_HEIGHT : widget.expandedHeight;
+  const targetHeight = isBeingDragged
+    ? COLLAPSED_HEIGHT
+    : (widget.collapsed ? COLLAPSED_HEIGHT : widget.expandedHeight);
+  const localLeft = widget.position.x - dockOffsetX;
 
   // Always set left/top in style so framer-motion has a stable base.
   // During drag: dnd-kit transform is layered on top via CSS transform.
@@ -144,25 +153,22 @@ export const WidgetPanel = React.memo(function WidgetPanel({
   const style: React.CSSProperties = {
     position: 'absolute',
     width: WIDGET_WIDTH,
-    pointerEvents: 'auto',
+    pointerEvents: isBeingDragged ? 'none' : 'auto',
     zIndex: isBeingDragged ? 50 : 30,
-    ...(isBeingDragged
-      ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
-      : {}),
+    ...(isBeingDragged ? { opacity: 0 } : {}),
   };
 
-  // During drag: animate to the base position (visual offset handled by
-  // CSS transform above) with duration 0 so framer-motion tracks the value
-  // without visible animation. After drag: animate to the store position
-  // with the normal transition, producing a smooth snap effect.
+  // During drag, include dnd transform in animate target so framer-motion
+  // tracks the *visual* position (even while hidden). This avoids stale
+  // motion values that can cause drop animation to start from dock top.
   const animateTarget = isBeingDragged
     ? {
-        left: widget.position.x,
-        top: widget.position.y,
+        left: localLeft + (transform?.x ?? 0),
+        top: widget.position.y + (transform?.y ?? 0),
         height: targetHeight,
       }
     : {
-        left: widget.position.x,
+        left: localLeft,
         top: widget.position.y,
         height: targetHeight,
       };
@@ -180,6 +186,7 @@ export const WidgetPanel = React.memo(function WidgetPanel({
   return (
       <motion.div
         ref={setNodeRef}
+        initial={false}
         style={style}
         data-widget-id={widgetId}
         animate={animateTarget}
@@ -191,6 +198,12 @@ export const WidgetPanel = React.memo(function WidgetPanel({
             : 'bg-gray-100/95 dark:bg-gray-900/95'
         }`}
       >
+        {highlightTopEdge && (
+          <div className="pointer-events-none absolute left-0 right-0 -top-px h-3 bg-gradient-to-b from-blue-400/30 to-transparent" />
+        )}
+        {highlightBottomEdge && (
+          <div className="pointer-events-none absolute left-0 right-0 -bottom-px h-3 bg-gradient-to-t from-blue-400/30 to-transparent" />
+        )}
         <WidgetHeader
           widgetId={widgetId}
           titleKey={titleKey}
@@ -204,9 +217,9 @@ export const WidgetPanel = React.memo(function WidgetPanel({
           className="overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           style={{
-            height: widget.collapsed ? 0 : 'auto',
+            height: widget.collapsed || isBeingDragged ? 0 : 'auto',
             overflow: 'hidden',
-            visibility: widget.collapsed ? 'hidden' : 'visible',
+            visibility: widget.collapsed || isBeingDragged ? 'hidden' : 'visible',
           }}
         >
           <WidgetErrorBoundary widgetId={widgetId}>
