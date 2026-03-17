@@ -1,0 +1,97 @@
+name: Sync upstream and publish Docker image
+
+on:
+  schedule:
+    - cron: "23 */6 * * *" # 每 6 小时检查一次，UTC；故意避开整点，减少 GitHub 调度延迟
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lumina-layers-sync-build
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.sync.outputs.changed }}
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync with upstream
+        id: sync
+        run: |
+          git remote remove upstream || true
+          git remote add upstream https://github.com/MOVIBALE/Lumina-Layers.git
+          git fetch upstream main
+
+          NEW_COMMITS=$(git rev-list --count HEAD..upstream/main)
+          echo "Upstream new commits: $NEW_COMMITS"
+
+          if [ "$NEW_COMMITS" -eq 0 ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No upstream changes."
+            exit 0
+          fi
+
+          if ! git merge upstream/main --no-edit; then
+            echo "Automatic merge failed. Resolve conflicts manually." >&2
+            exit 1
+          fi
+
+          git push origin HEAD:main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "Upstream changes merged and pushed."
+
+  build:
+    needs: sync
+    if: needs.sync.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: gengqq002/lumina-layers
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          pull: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
