@@ -3,7 +3,7 @@
 """Lumina Studio 2.0 — 开发环境启动器（重构版）
 
 功能：
-  - 一键启动 Backend (FastAPI :8000) + Frontend (Vite :5173)
+  - 一键启动 Backend (FastAPI :8000) + Frontend (Vite :5174)
   - 支持一键重启（按 r + Enter）
   - 启动前自动清理残留端口占用
   - 彩色日志输出，区分 Backend / Frontend
@@ -32,7 +32,7 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
 
 BACKEND_PORT = 8000
-FRONTEND_PORT = 5173
+FRONTEND_PORT = 5174
 POLL_INTERVAL = 0.3
 SHUTDOWN_TIMEOUT = 5
 MAX_AUTO_RESTART = 3  # 自动重启上限，防止死循环
