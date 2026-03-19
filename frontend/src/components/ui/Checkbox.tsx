@@ -1,11 +1,8 @@
-import WikiTooltip from "./WikiTooltip";
-
 interface CheckboxProps {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
-  tooltip?: string;
 }
 
 export default function Checkbox({
@@ -13,30 +10,23 @@ export default function Checkbox({
   checked,
   onChange,
   disabled = false,
-  tooltip,
 }: CheckboxProps) {
-  const labelSpan = tooltip ? (
-    <WikiTooltip title={label} description={tooltip} placement="top" delay={400}>
-      <span className="text-gray-700 dark:text-gray-300 cursor-help border-b border-dashed border-gray-400 dark:border-gray-500">
-        {label}
-      </span>
-    </WikiTooltip>
-  ) : (
-    <span className="text-gray-700 dark:text-gray-300">{label}</span>
-  );
-
   return (
     <label
-      className={`flex items-center gap-2 text-sm ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+      className={`flex items-center gap-3 rounded-2xl border px-3 py-2 text-sm transition-colors ${
+        disabled
+          ? "cursor-not-allowed border-slate-200/60 bg-slate-100/70 opacity-45 dark:border-slate-800/60 dark:bg-slate-900/50"
+          : "cursor-pointer border-slate-200/80 bg-white/60 hover:border-slate-300 hover:bg-white/75 dark:border-slate-700/80 dark:bg-slate-900/55 dark:hover:border-slate-600 dark:hover:bg-slate-900/75"
+      }`}
     >
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-blue-500 accent-blue-500 transition-all duration-200 hover:scale-110 focus:ring-2 focus:ring-blue-500/40 outline-none disabled:cursor-not-allowed"
+        className="h-4 w-4 rounded border-slate-300 bg-white text-blue-500 accent-blue-500 transition-all duration-200 focus:ring-4 focus:ring-[var(--focus-ring)] outline-none disabled:cursor-not-allowed dark:border-slate-600 dark:bg-slate-800"
       />
-      {labelSpan}
+      <span className="text-slate-700 dark:text-slate-200">{label}</span>
     </label>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import WikiTooltip from "./WikiTooltip";
+import { cx } from "./panelPrimitives";
 
 interface SliderProps {
   label: string;
@@ -10,7 +10,8 @@ interface SliderProps {
   onChange: (value: number) => void;
   disabled?: boolean;
   unit?: string;
-  tooltip?: string;
+  displayDecimals?: number;
+  minInputWidthCh?: number;
 }
 
 export default function Slider({
@@ -22,37 +23,38 @@ export default function Slider({
   onChange,
   disabled = false,
   unit,
-  tooltip,
+  displayDecimals,
+  minInputWidthCh,
 }: SliderProps) {
   // 输入框的本地文本状态，编辑时不立即同步外部 value
-  const [inputText, setInputText] = useState(() => formatValue(value, step));
+  const [inputText, setInputText] = useState(() => formatValue(value, step, displayDecimals));
   const [isFocused, setIsFocused] = useState(false);
 
   // 外部 value 变化时，如果输入框没有焦点，同步显示
   useEffect(() => {
     if (!isFocused) {
-      setInputText(formatValue(value, step));
+      setInputText(formatValue(value, step, displayDecimals));
     }
-  }, [value, step, isFocused]);
+  }, [value, step, displayDecimals, isFocused]);
 
   const commitValue = useCallback(
     (text: string) => {
       const num = parseFloat(text);
       if (isNaN(num)) {
         // 无效输入，恢复为当前值
-        setInputText(formatValue(value, step));
+        setInputText(formatValue(value, step, displayDecimals));
         return;
       }
       // clamp 到 min/max 范围，并对齐 step
       const clamped = Math.min(max, Math.max(min, num));
       const aligned = Math.round(clamped / step) * step;
       // 修正浮点精度
-      const decimals = getDecimals(step);
+      const decimals = getStepDecimals(step);
       const final = parseFloat(aligned.toFixed(decimals));
       onChange(final);
-      setInputText(formatValue(final, step));
+      setInputText(formatValue(final, step, displayDecimals));
     },
-    [value, min, max, step, onChange],
+    [value, min, max, step, onChange, displayDecimals],
   );
 
   const handleBlur = () => {
@@ -65,35 +67,27 @@ export default function Slider({
       commitValue(inputText);
       (e.target as HTMLInputElement).blur();
     } else if (e.key === "Escape") {
-      setInputText(formatValue(value, step));
+      setInputText(formatValue(value, step, displayDecimals));
       (e.target as HTMLInputElement).blur();
     }
   };
 
   // 计算输入框宽度：根据 max 值的字符数 + unit
   const maxChars = Math.max(
-    formatValue(max, step).length,
-    formatValue(min, step).length,
+    formatValue(max, step, displayDecimals).length,
+    formatValue(min, step, displayDecimals).length,
     4,
   );
-  const inputWidth = `${maxChars + 1}ch`;
+  const inputWidth = `${Math.max(maxChars + 1, minInputWidthCh ?? 0)}ch`;
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       {label && (
-        tooltip ? (
-          <WikiTooltip title={label} description={tooltip} placement="top" delay={400}>
-            <label className="text-sm text-gray-700 dark:text-gray-300 cursor-help border-b border-dashed border-gray-400 dark:border-gray-500">
-              {label}
-            </label>
-          </WikiTooltip>
-        ) : (
-          <label className="text-sm text-gray-700 dark:text-gray-300">
-            {label}
-          </label>
-        )
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+          {label}
+        </label>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/58 px-3 py-2 shadow-[var(--shadow-control)] dark:border-slate-700/80 dark:bg-slate-900/48">
         <input
           type="range"
           min={min}
@@ -102,7 +96,11 @@ export default function Slider({
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-gray-300 dark:bg-gray-700 accent-blue-500 transition-all duration-200 hover:accent-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:opacity-40 disabled:cursor-not-allowed"
+          className={cx(
+            "slider-track flex-1 appearance-none cursor-pointer rounded-full accent-blue-500 transition-all duration-200",
+            "h-1.5 bg-slate-200 dark:bg-slate-700",
+            "focus:outline-none focus:ring-4 focus:ring-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-45"
+          )}
         />
         <div className="flex items-center gap-0.5 shrink-0">
           <input
@@ -115,11 +113,11 @@ export default function Slider({
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             style={{ width: inputWidth }}
-            className="text-xs tabular-nums text-right px-1 py-0.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            className="rounded-xl border border-slate-200/80 bg-white/90 px-2 py-1 text-right text-xs tabular-nums text-slate-700 shadow-[var(--shadow-control)] focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-700/80 dark:bg-slate-900 dark:text-slate-100"
             aria-label={`${label} value`}
           />
           {unit && (
-            <span className="text-[10px] text-gray-400 dark:text-gray-500">
+            <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
               {unit}
             </span>
           )}
@@ -129,15 +127,20 @@ export default function Slider({
   );
 }
 
-/** 根据 step 精度格式化数值 */
-function formatValue(val: number, step: number): string {
-  const decimals = getDecimals(step);
+/** 根据显示精度格式化数值 */
+function formatValue(val: number, step: number, displayDecimals?: number): string {
+  const decimals = getDisplayDecimals(step, displayDecimals);
   return val.toFixed(decimals);
 }
 
 /** 获取 step 的小数位数 */
-function getDecimals(step: number): number {
+function getStepDecimals(step: number): number {
   const s = step.toString();
   const dot = s.indexOf(".");
   return dot === -1 ? 0 : s.length - dot - 1;
+}
+
+/** 获取输入框显示所需的小数位数 */
+function getDisplayDecimals(step: number, displayDecimals?: number): number {
+  return displayDecimals ?? getStepDecimals(step);
 }

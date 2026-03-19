@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import type { RefObject } from 'react';
-import { SNAP_THRESHOLD, WIDGET_WIDTH } from '../../utils/widgetUtils';
+import { SNAP_THRESHOLD, WIDGET_PANEL_RADIUS, WIDGET_WIDTH } from '../../utils/widgetUtils';
 import type { WidgetId } from '../../types/widget';
 
 interface InsertPreviewState {
@@ -17,12 +17,18 @@ interface InsertPreviewState {
   lowerId: WidgetId | null;
 }
 
+interface HighlightBounds {
+  top: number;
+  height: number;
+}
+
 interface GuideOverlayState {
+  effectiveWidth: number;
   nearLeft: boolean;
   nearRight: boolean;
   insertPreview: InsertPreviewState | null;
-  upperHighlightTop: number | null;
-  lowerHighlightTop: number | null;
+  upperHighlight: HighlightBounds | null;
+  lowerHighlight: HighlightBounds | null;
 }
 
 interface SnapGuidesProps {
@@ -33,15 +39,27 @@ interface SnapGuidesProps {
   containerWidth: number;
 }
 
-const HIGHLIGHT_HEIGHT = 12;
+const BOUNDS_REFRESH_INTERVAL = 10;
+const INSERT_LINE_HEIGHT = 6;
+const INSERT_LINE_INSET = 8;
 
 const EMPTY_OVERLAY_STATE: GuideOverlayState = {
+  effectiveWidth: 0,
   nearLeft: false,
   nearRight: false,
   insertPreview: null,
-  upperHighlightTop: null,
-  lowerHighlightTop: null,
+  upperHighlight: null,
+  lowerHighlight: null,
 };
+
+export function resolvePreviewLineLeft(
+  edge: 'left' | 'right' | undefined,
+  effectiveWidth: number
+): number {
+  return edge === 'right'
+    ? Math.max(0, effectiveWidth - WIDGET_WIDTH)
+    : 0;
+}
 
 function getWidgetBounds(
   container: HTMLDivElement,
@@ -57,6 +75,15 @@ function getWidgetBounds(
     top: widgetRect.top - containerRect.top,
     height: widgetRect.height,
   };
+}
+
+function isSameBounds(
+  prev: HighlightBounds | null,
+  next: HighlightBounds | null
+): boolean {
+  if (prev === next) return true;
+  if (!prev || !next) return false;
+  return prev.top === next.top && prev.height === next.height;
 }
 
 function isSamePreview(
@@ -75,10 +102,11 @@ function isSamePreview(
 
 function isSameOverlayState(prev: GuideOverlayState, next: GuideOverlayState): boolean {
   return (
+    prev.effectiveWidth === next.effectiveWidth &&
     prev.nearLeft === next.nearLeft &&
     prev.nearRight === next.nearRight &&
-    prev.upperHighlightTop === next.upperHighlightTop &&
-    prev.lowerHighlightTop === next.lowerHighlightTop &&
+    isSameBounds(prev.upperHighlight, next.upperHighlight) &&
+    isSameBounds(prev.lowerHighlight, next.lowerHighlight) &&
     isSamePreview(prev.insertPreview, next.insertPreview)
   );
 }
@@ -99,6 +127,11 @@ export function SnapGuides({
     }
 
     let rafId = 0;
+    let cachedPreviewKey = '';
+    let cachedUpperBounds: HighlightBounds | null = null;
+    let cachedLowerBounds: HighlightBounds | null = null;
+    let framesSinceBoundsRefresh = BOUNDS_REFRESH_INTERVAL;
+
     const tick = () => {
       const pos = dragPositionRef.current;
       const container = containerRef.current;
@@ -113,16 +146,38 @@ export function SnapGuides({
 
       const nearLeft = pos.x < SNAP_THRESHOLD;
       const nearRight = effectiveWidth - (pos.x + WIDGET_WIDTH) < SNAP_THRESHOLD;
-      const lowerBounds = insertPreview?.lowerId ? getWidgetBounds(container, insertPreview.lowerId) : null;
-      const upperBounds = insertPreview?.upperId ? getWidgetBounds(container, insertPreview.upperId) : null;
+      const previewKey = insertPreview
+        ? `${insertPreview.edge}:${insertPreview.upperId ?? ''}:${insertPreview.lowerId ?? ''}`
+        : '';
+
+      if (!insertPreview) {
+        cachedPreviewKey = '';
+        cachedUpperBounds = null;
+        cachedLowerBounds = null;
+        framesSinceBoundsRefresh = BOUNDS_REFRESH_INTERVAL;
+      } else if (
+        previewKey !== cachedPreviewKey ||
+        framesSinceBoundsRefresh >= BOUNDS_REFRESH_INTERVAL
+      ) {
+        cachedPreviewKey = previewKey;
+        cachedUpperBounds = insertPreview.upperId
+          ? getWidgetBounds(container, insertPreview.upperId)
+          : null;
+        cachedLowerBounds = insertPreview.lowerId
+          ? getWidgetBounds(container, insertPreview.lowerId)
+          : null;
+        framesSinceBoundsRefresh = 0;
+      } else {
+        framesSinceBoundsRefresh += 1;
+      }
+
       const nextState: GuideOverlayState = {
+        effectiveWidth,
         nearLeft,
         nearRight,
         insertPreview: insertPreview ?? null,
-        lowerHighlightTop: lowerBounds ? lowerBounds.top - 1 : null,
-        upperHighlightTop: upperBounds
-          ? upperBounds.top + upperBounds.height - HIGHLIGHT_HEIGHT + 1
-          : null,
+        lowerHighlight: cachedLowerBounds,
+        upperHighlight: cachedUpperBounds,
       };
 
       setOverlayState((prev) => (isSameOverlayState(prev, nextState) ? prev : nextState));
@@ -133,14 +188,32 @@ export function SnapGuides({
     return () => cancelAnimationFrame(rafId);
   }, [isDragging, dragPositionRef, insertPreviewRef, containerRef, containerWidth]);
 
-  const { nearLeft, nearRight, insertPreview, lowerHighlightTop, upperHighlightTop } = overlayState;
-  if (!nearLeft && !nearRight && !insertPreview && lowerHighlightTop === null && upperHighlightTop === null) {
+  const { effectiveWidth, nearLeft, nearRight, insertPreview, lowerHighlight, upperHighlight } = overlayState;
+  if (!nearLeft && !nearRight && !insertPreview && !lowerHighlight && !upperHighlight) {
     return null;
   }
 
-  const previewLineLeft = insertPreview?.edge === 'left'
-    ? 0
-    : Math.max(0, containerWidth - WIDGET_WIDTH);
+  const previewLineLeft = resolvePreviewLineLeft(insertPreview?.edge, effectiveWidth);
+
+  const createEdgeHighlightStyle = (
+    bounds: HighlightBounds,
+    edge: 'top' | 'bottom'
+  ) => ({
+    top: Math.max(0, bounds.top),
+    left: previewLineLeft,
+    width: WIDGET_WIDTH,
+    height: bounds.height,
+    borderRadius: WIDGET_PANEL_RADIUS,
+    border: '1px solid rgba(96,165,250,0.24)',
+    background:
+      edge === 'top'
+        ? 'linear-gradient(to bottom, rgba(96,165,250,0.16) 0%, rgba(96,165,250,0.08) 20%, rgba(96,165,250,0) 42%)'
+        : 'linear-gradient(to top, rgba(96,165,250,0.16) 0%, rgba(96,165,250,0.08) 20%, rgba(96,165,250,0) 42%)',
+    boxShadow:
+      edge === 'top'
+        ? 'inset 0 1px 0 rgba(191,219,254,0.6), inset 0 12px 18px -16px rgba(59,130,246,0.9)'
+        : 'inset 0 -1px 0 rgba(191,219,254,0.6), inset 0 -12px 18px -16px rgba(59,130,246,0.9)',
+  });
 
   return (
     <div className="absolute inset-0 z-20 pointer-events-none">
@@ -154,39 +227,29 @@ export function SnapGuides({
           className="absolute right-0 top-0 bottom-0 w-0.5 bg-blue-400/60 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
         />
       )}
-      {lowerHighlightTop !== null && insertPreview && (
+      {lowerHighlight && insertPreview && (
         <div
           className="absolute"
-          style={{
-            top: Math.max(0, lowerHighlightTop),
-            left: previewLineLeft,
-            width: WIDGET_WIDTH,
-            height: HIGHLIGHT_HEIGHT,
-            background: 'linear-gradient(to bottom, rgba(96,165,250,0.3), transparent)',
-          }}
+          style={createEdgeHighlightStyle(lowerHighlight, 'top')}
         />
       )}
-      {upperHighlightTop !== null && insertPreview && (
+      {upperHighlight && insertPreview && (
         <div
           className="absolute"
-          style={{
-            top: Math.max(0, upperHighlightTop),
-            left: previewLineLeft,
-            width: WIDGET_WIDTH,
-            height: HIGHLIGHT_HEIGHT,
-            background: 'linear-gradient(to top, rgba(96,165,250,0.3), transparent)',
-          }}
+          style={createEdgeHighlightStyle(upperHighlight, 'bottom')}
         />
       )}
       {insertPreview && (
         <div
           className="absolute"
           style={{
-            top: Math.max(0, insertPreview.lineY) - 4,
-            left: previewLineLeft,
-            width: WIDGET_WIDTH,
-            height: 8,
-            background: 'linear-gradient(to bottom, transparent, rgba(96,165,250,0.25), transparent)',
+            top: Math.max(0, insertPreview.lineY) - INSERT_LINE_HEIGHT / 2,
+            left: previewLineLeft + INSERT_LINE_INSET,
+            width: Math.max(0, WIDGET_WIDTH - INSERT_LINE_INSET * 2),
+            height: INSERT_LINE_HEIGHT,
+            borderRadius: 999,
+            background: 'linear-gradient(to right, rgba(96,165,250,0.18), rgba(96,165,250,0.42), rgba(96,165,250,0.18))',
+            boxShadow: '0 0 0 1px rgba(96,165,250,0.22), 0 0 14px rgba(59,130,246,0.18)',
           }}
         />
       )}

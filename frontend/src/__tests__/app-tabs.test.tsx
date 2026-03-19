@@ -38,8 +38,13 @@ beforeEach(() => {
 });
 
 describe("App Widget Toggles", () => {
+  function openWidgetMenu() {
+    fireEvent.click(screen.getByTestId("panel-controls-toggle"));
+  }
+
   it("renders widget toggle buttons only for current tab (converter by default)", () => {
     render(<App />);
+    openWidgetMenu();
 
     // Converter page widgets (default active tab) should be visible
     expect(screen.getByTestId("widget-toggle-basic-settings")).toBeInTheDocument();
@@ -54,50 +59,51 @@ describe("App Widget Toggles", () => {
 
   it("converter tab widgets are visible by default", () => {
     render(<App />);
+    openWidgetMenu();
 
     const basicToggle = screen.getByTestId("widget-toggle-basic-settings");
     const actionBarToggle = screen.getByTestId("widget-toggle-action-bar");
 
-    // Both should have the active style (bg-blue-600)
-    expect(basicToggle.className).toContain("bg-blue-600");
-    expect(actionBarToggle.className).toContain("bg-blue-600");
+    expect(basicToggle.className).toContain("bg-blue-50");
+    expect(actionBarToggle.className).toContain("bg-blue-50");
   });
 
   it("toggles widget visibility when toggle button is clicked", () => {
     render(<App />);
+    openWidgetMenu();
 
     const basicToggle = screen.getByTestId("widget-toggle-basic-settings");
 
-    // Initially visible (blue)
-    expect(basicToggle.className).toContain("bg-blue-600");
+    expect(basicToggle.className).toContain("bg-blue-50");
 
     // Click to hide
     fireEvent.click(basicToggle);
 
-    // Should now be inactive (gray)
-    expect(basicToggle.className).not.toContain("bg-blue-600");
-    expect(basicToggle.className).toContain("bg-gray-200");
+    expect(basicToggle.className).not.toContain("bg-blue-50");
+    expect(basicToggle.className).toContain("bg-transparent");
   });
 
   it("toggles widget back to visible when clicked again", () => {
     render(<App />);
+    openWidgetMenu();
 
     const basicToggle = screen.getByTestId("widget-toggle-basic-settings");
 
     // Click to hide
     fireEvent.click(basicToggle);
-    expect(basicToggle.className).toContain("bg-gray-200");
+    expect(basicToggle.className).toContain("bg-transparent");
 
     // Click to show again
     fireEvent.click(basicToggle);
-    expect(basicToggle.className).toContain("bg-blue-600");
+    expect(basicToggle.className).toContain("bg-blue-50");
   });
 
   it("renders reset layout button", () => {
     render(<App />);
+    openWidgetMenu();
 
     const resetButton = screen.getByTestId("widget-reset-layout");
     expect(resetButton).toBeInTheDocument();
-    expect(resetButton.textContent).toBe("↺");
+    expect(resetButton.textContent).toContain("重置布局");
   });
 });

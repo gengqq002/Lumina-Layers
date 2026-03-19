@@ -42,11 +42,11 @@ describe("CalibrationPanel", () => {
     const selects = screen.getAllByRole("combobox");
     expect(selects[0]).toHaveValue(CalibrationColorMode.FOUR_COLOR_RYBW);
 
-    // Block size default 5 mm
-    expect(screen.getByText("5 mm")).toBeInTheDocument();
+    // Block size default 5 mm, rendered with two decimals
+    expect(screen.getByLabelText("色块尺寸 value")).toHaveValue("5.00");
 
     // Gap default 0.82 mm
-    expect(screen.getByText("0.82 mm")).toBeInTheDocument();
+    expect(screen.getByLabelText("色块间距 value")).toHaveValue("0.82");
 
     // Backing color defaults to White
     expect(selects[1]).toHaveValue(BackingColor.WHITE);

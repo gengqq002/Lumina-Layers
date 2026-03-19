@@ -68,7 +68,7 @@ export default function TabNavBar({ activeTab, onTabChange }: TabNavBarProps) {
   const { t } = useI18n();
 
   return (
-    <nav className="relative flex items-center p-1.5 bg-gray-200/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-2xl shadow-[inset_0_1px_4px_rgba(0,0,0,0.05)] dark:shadow-[inset_0_1px_4px_rgba(0,0,0,0.4)] border border-white/40 dark:border-white/5 mx-2 xl:mx-8">
+    <nav className="relative mx-2 flex items-center rounded-2xl border border-slate-200/80 bg-slate-100/90 p-1.5 dark:border-slate-800/80 dark:bg-slate-900/90 xl:mx-8">
       {TAB_LIST.map(({ id, titleKey }) => {
         const isActive = id === activeTab;
         
@@ -89,7 +89,7 @@ export default function TabNavBar({ activeTab, onTabChange }: TabNavBarProps) {
             {isActive && (
               <motion.div
                 layoutId="active-tab-indicator"
-                className="absolute inset-0 bg-white dark:bg-gray-700 rounded-xl shadow-[0_2px_10px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_10px_rgba(0,0,0,0.5)] border border-gray-100 dark:border-gray-600/50"
+                className="absolute inset-0 rounded-xl border border-slate-200/80 bg-white dark:border-slate-700/80 dark:bg-slate-800"
                 transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
                 style={{ zIndex: -1 }}
               />

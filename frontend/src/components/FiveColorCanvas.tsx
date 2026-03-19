@@ -3,7 +3,7 @@
  * 用 Canvas 2D 绘制 5 层半透明薄片，选满后播放叠加动画，融合成结果颜色。
  */
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 
 interface SliceColor {
   hex: string;
@@ -42,10 +42,10 @@ function drawSlice(
   ctx.save();
   ctx.globalAlpha = alpha;
   if (shadow) {
-    ctx.shadowColor = "rgba(0,0,0,0.3)";
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 4;
+    ctx.shadowColor = "rgba(0,0,0,0.22)";
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 2;
   }
 
   // 平行四边形四个角
@@ -94,7 +94,7 @@ function drawResultCircle(
 
   // 外发光
   ctx.shadowColor = color;
-  ctx.shadowBlur = 20 * progress;
+  ctx.shadowBlur = 10 * progress;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fillStyle = color;
@@ -117,19 +117,47 @@ export default function FiveColorCanvas({ slices, resultHex, isLoading }: FiveCo
   const phaseRef = useRef<"idle" | "stacking" | "merging" | "done">("idle");
   const progressRef = useRef(0);
   const prevSliceCountRef = useRef(0);
+  const sizeRef = useRef({ width: 0, height: 0, dpr: 1 });
+  const [animationEpoch, setAnimationEpoch] = useState(0);
 
-  const draw = useCallback(() => {
+  const resizeCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return false;
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(canvas.clientWidth));
+    const height = Math.max(1, Math.round(canvas.clientHeight));
+    const pixelWidth = Math.round(width * dpr);
+    const pixelHeight = Math.round(height * dpr);
+
+    if (
+      canvas.width === pixelWidth &&
+      canvas.height === pixelHeight &&
+      sizeRef.current.width === width &&
+      sizeRef.current.height === height &&
+      sizeRef.current.dpr === dpr
+    ) {
+      return false;
+    }
+
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+    sizeRef.current = { width, height, dpr };
+    return true;
+  }, []);
+
+  const draw = useCallback((timestamp: number = Date.now()) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    ctx.scale(dpr, dpr);
+    if (sizeRef.current.width === 0 || sizeRef.current.height === 0) {
+      resizeCanvas();
+    }
+
+    const { width: w, height: h, dpr } = sizeRef.current;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     ctx.clearRect(0, 0, w, h);
 
@@ -232,18 +260,47 @@ export default function FiveColorCanvas({ slices, resultHex, isLoading }: FiveCo
       ctx.fillStyle = loadingTextColor;
       ctx.font = "13px sans-serif";
       ctx.textAlign = "center";
-      const dots = ".".repeat(Math.floor((Date.now() / 400) % 4));
+      const dots = ".".repeat(Math.floor((timestamp / 400) % 4));
       ctx.fillText(`查询中${dots}`, w / 2, h - 30);
       ctx.restore();
     }
-  }, [slices, resultHex, isLoading]);
+  }, [isLoading, resizeCanvas, resultHex, slices]);
 
-  // 动画循环
   useEffect(() => {
-    let running = true;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    const loop = () => {
-      if (!running) return;
+    const syncSize = () => {
+      const resized = resizeCanvas();
+      if (resized) {
+        draw();
+      }
+    };
+
+    syncSize();
+    const observer = new ResizeObserver(syncSize);
+    observer.observe(canvas);
+    window.addEventListener("resize", syncSize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", syncSize);
+    };
+  }, [draw, resizeCanvas]);
+
+  useEffect(() => {
+    const shouldAnimate =
+      phaseRef.current === "stacking" ||
+      phaseRef.current === "merging" ||
+      isLoading;
+
+    if (!shouldAnimate) {
+      draw();
+      return;
+    }
+
+    let frame = 0;
+    const loop = (timestamp: number) => {
       const phase = phaseRef.current;
 
       if (phase === "stacking") {
@@ -254,22 +311,39 @@ export default function FiveColorCanvas({ slices, resultHex, isLoading }: FiveCo
         if (progressRef.current >= 1) phaseRef.current = "done";
       }
 
-      draw();
-      animRef.current = requestAnimationFrame(loop);
+      draw(timestamp);
+
+      if (
+        phaseRef.current === "stacking" ||
+        phaseRef.current === "merging" ||
+        isLoading
+      ) {
+        frame = requestAnimationFrame(loop);
+        animRef.current = frame;
+      }
     };
 
-    animRef.current = requestAnimationFrame(loop);
+    frame = requestAnimationFrame(loop);
+    animRef.current = frame;
     return () => {
-      running = false;
-      cancelAnimationFrame(animRef.current);
+      cancelAnimationFrame(frame);
     };
-  }, [draw]);
+  }, [animationEpoch, draw, isLoading]);
+
+  useEffect(() => {
+    if (isLoading) {
+      setAnimationEpoch((value) => value + 1);
+      return;
+    }
+    draw();
+  }, [draw, isLoading]);
 
   // 新增颜色时触发入场动画
   useEffect(() => {
     if (slices.length > prevSliceCountRef.current && slices.length <= 5) {
       phaseRef.current = "stacking";
       progressRef.current = 0;
+      setAnimationEpoch((value) => value + 1);
     }
     prevSliceCountRef.current = slices.length;
   }, [slices.length]);
@@ -279,21 +353,24 @@ export default function FiveColorCanvas({ slices, resultHex, isLoading }: FiveCo
     if (resultHex && slices.length === 5) {
       phaseRef.current = "merging";
       progressRef.current = 0;
+      setAnimationEpoch((value) => value + 1);
     }
     // 结果被清除（如反序操作），重置回正常堆叠
     if (!resultHex && slices.length === 5 && (phaseRef.current === "merging" || phaseRef.current === "done")) {
       phaseRef.current = "idle";
       progressRef.current = 0;
+      draw();
     }
-  }, [resultHex, slices.length]);
+  }, [draw, resultHex, slices.length]);
 
   // 清除时重置
   useEffect(() => {
     if (slices.length === 0) {
       phaseRef.current = "idle";
       progressRef.current = 0;
+      draw();
     }
-  }, [slices.length]);
+  }, [draw, slices.length]);
 
   return (
     <canvas

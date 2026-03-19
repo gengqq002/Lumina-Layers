@@ -13,6 +13,16 @@ import { useI18n } from "../i18n/context";
 import { useThemeConfig } from "../hooks/useThemeConfig";
 import { useWittyMessage } from "../hooks/useWittyMessage";
 
+declare global {
+  interface Window {
+    __luminaCameraDebug?: () => {
+      cameraPosition: { x: number; y: number; z: number };
+      orbitTarget: { x: number; y: number; z: number };
+      fov: number;
+    };
+  }
+}
+
 interface Scene3DProps {
   modelUrl?: string;
 }
@@ -41,10 +51,13 @@ function ScreenshotHelper({
 function CameraDebugHelper() {
   const { camera, controls } = useThree();
   useEffect(() => {
-    (window as any).__luminaCameraDebug = () => {
+    window.__luminaCameraDebug = () => {
       const pos = camera.position;
-      const oc = controls as any;
-      const target = oc?.target ?? { x: 0, y: 0, z: 0 };
+      const orbitControls =
+        controls && "target" in controls
+          ? (controls as { target?: THREE.Vector3 | null })
+          : null;
+      const target = orbitControls?.target ?? { x: 0, y: 0, z: 0 };
       const info = {
         cameraPosition: { x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), z: +pos.z.toFixed(2) },
         orbitTarget: { x: +target.x.toFixed(2), y: +target.y.toFixed(2), z: +target.z.toFixed(2) },
@@ -290,14 +303,13 @@ function Scene3D({ modelUrl }: Scene3DProps) {
               data-testid="loading-overlay"
             >
               <div className="relative flex items-center justify-center p-4">
-                <div className="absolute h-20 w-20 rgb-loader-glow animate-glow-pulse" />
                 <div className="relative flex h-20 w-20 items-center justify-center">
                   <div className="absolute inset-0 rgb-loader-ring" />
-                  <div className="h-4 w-4 rounded-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)]" />
+                  <div className="h-3 w-3 rounded-full bg-white/90" />
                 </div>
               </div>
-              <div className="px-4 py-2 rounded-full bg-gray-900/80 backdrop-blur-md border border-white/10 shadow-2xl">
-                <p className="text-sm font-medium text-white tracking-wide animate-pulse whitespace-nowrap">
+              <div className="rounded-full border border-white/10 bg-gray-900/92 px-4 py-2">
+                <p className="whitespace-nowrap text-sm font-medium tracking-wide text-white">
                   {wittyMsg}
                 </p>
               </div>

@@ -15,7 +15,7 @@ import { motion } from 'framer-motion';
 import { WidgetHeader } from './WidgetHeader';
 import { useWidgetStore } from '../../stores/widgetStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { COLLAPSED_HEIGHT, WIDGET_WIDTH } from '../../utils/widgetUtils';
+import { COLLAPSED_HEIGHT, WIDGET_PANEL_RADIUS, WIDGET_WIDTH } from '../../utils/widgetUtils';
 import type { WidgetId } from '../../types/widget';
 import { useI18n } from '../../i18n/context';
 
@@ -149,6 +149,7 @@ export const WidgetPanel = React.memo(function WidgetPanel({
   const style: React.CSSProperties = {
     position: 'absolute',
     width: WIDGET_WIDTH,
+    borderRadius: WIDGET_PANEL_RADIUS,
     pointerEvents: isBeingDragged ? 'none' : 'auto',
     zIndex: isBeingDragged ? 50 : 30,
     ...(isBeingDragged ? { opacity: 0 } : {}),
@@ -188,10 +189,10 @@ export const WidgetPanel = React.memo(function WidgetPanel({
         animate={animateTarget}
         transition={transition}
         onAnimationComplete={handleAnimationComplete}
-        className={`rounded-xl shadow-lg border border-white/20 dark:border-gray-700/50 will-change-transform ${
+        className={`border border-slate-200/80 shadow-[var(--shadow-control)] will-change-transform ${
           enableBlur
-            ? 'backdrop-blur-xl bg-white/70 dark:bg-gray-900/70'
-            : 'bg-gray-100/95 dark:bg-gray-900/95'
+            ? 'bg-slate-50/92 backdrop-blur-[2px] dark:bg-slate-950/92'
+            : 'bg-slate-50/98 dark:bg-slate-950/98'
         }`}
       >
         <WidgetHeader

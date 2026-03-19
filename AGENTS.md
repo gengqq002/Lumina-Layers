@@ -1,43 +1,57 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
-Lumina Studio is a Python + React/TypeScript full-color 3D printing application. Core business logic lives in `core/`, with zero UI dependencies. The FastAPI REST backend in `api/` exposes domain routes (`/api/calibration`, `/api/converter`, `/api/extractor`, `/api/lut`, etc.) with Pydantic schemas in `api/schemas/` and CPU-intensive workers in `api/workers/`. The legacy Gradio UI resides in `ui/`, while the primary React frontend lives in `frontend/src/` with Zustand stores, Axios API clients, and Three.js 3D rendering. Shared utilities are in `utils/` (3MF writer, LUT manager). Configuration is centralized in `config.py`. Community LUT presets are organized by brand under `lut-npy预设/`.
+## Scope
+Lumina Studio is a Python + React/TypeScript multi-material FDM color workflow built around `api/` + `api_server.py` + `frontend/` (FastAPI `:8000` + Vite `:5174`).
 
-## Build, Test, and Development Commands
-No build step needed for Python backend. Frontend builds via `cd frontend && tsc -b && vite build` to `frontend/dist/`.
+## Structure
+- `core/`: UI-agnostic domain logic and the staged pipeline in `core/pipeline/`
+- `api/`: FastAPI routers, schemas, session/file lifecycle, and worker orchestration
+- `frontend/src/`: React 19, TypeScript, Zustand, Axios, Three.js, Tailwind, and Vitest
+- `tests/` and `frontend/src/__tests__/`: backend/frontend regression coverage
+- `printer_profiles/`, `assets/`, `lut-npy预设/`: templates, runtime assets, and LUT presets
 
-Development:
-- `pip install -r requirements.txt` then `cd frontend && npm install` for dependencies.
-- `python main.py` starts Gradio monolithic mode.
-- `start_dev.bat` or manually `python api_server.py` (backend :8000) + `cd frontend && npm run dev` (frontend :5173) for separated mode.
-- `python -m pytest tests/ -v` runs Python tests; `cd frontend && npx vitest --run` runs frontend tests.
-- `python -m pytest tests/ --hypothesis-show-statistics` for Property-Based test statistics.
-- `docker build -t lumina-layers . && docker run -p 7860:7860 lumina-layers` for containerized deployment.
+## Common Commands
+- `pip install -r requirements.txt`
+- `cd frontend && npm install`
+- `python api_server.py` | `python start_dev.py`
+- `cd frontend && npm run dev|build|lint`
+- `python -m pytest tests/ -v`
+- `python -m pytest tests/ --hypothesis-show-statistics`
+- `cd frontend && npx vitest --run`
+- `docker build -t lumina-layers . && docker run -p 7860:7860 lumina-layers`
 
-## Coding Style & Naming Conventions
-Python follows PEP 8 with mandatory type hints on all new functions. Prefer NumPy vectorized operations over `for` loops. All new functions require bilingual Google-Style docstrings (English summary + 中文摘要). No emoji in identifiers. TypeScript uses functional React components with hooks, Zustand for state, and Tailwind CSS for styling. Frontend follows ESLint 9 configuration.
+## Engineering Rules
+- Python: PEP 8, explicit type hints, bilingual Google-style docstrings for new or changed public APIs
+- Prefer NumPy/vectorized operations in hot paths
+- Code shall favor good OO design: clear abstractions, single responsibility, high cohesion, low coupling, and readable composition
+- Code shall remain easy to read: descriptive names, small helpers, shallow nesting, and no overlong functions, god objects, or copy-pasted logic
+- Worker entry points must be top-level and picklable; pass only scalars and file paths across processes
+- Reuse canonical enums/config from `config.py`, API schemas, and frontend constants
+- New color modes, modeling modes, printer profiles, or slicer integrations must update validation, UI, translations, persisted settings, and tests together
 
-## Frontend Feature Requirements
-All new frontend features with user-visible UI must comply with:
-- **Internationalization (i18n)**: All user-facing strings must be defined in `frontend/src/i18n/translations.ts` and accessed via the `useI18n()` hook. No hardcoded Chinese or English text in components.
-- **Dark/Light Theme**: All colors, backgrounds, and borders must use Tailwind theme variables or tokens from `themeConfig.ts`. Components must render correctly in both dark and light modes. Never hardcode color values like `#fff` or `bg-white`.
-- Backend-only changes (core/, api/, utils/) are exempt from these requirements.
+## Frontend Rules
+- All user-facing strings must come from `frontend/src/i18n/translations.ts`
+- Support both light and dark themes via tokens/Tailwind vars; no raw UI colors like `#fff`, `bg-white`, or `text-black`
+- Keep components focused on presentation/local interaction; use API clients and Zustand stores for orchestration
+- Preserve `settingsStore` persistence and best-effort backend sync
 
-## Testing Guidelines
-Python tests use pytest + Hypothesis. Unit tests are named `test_*_unit.py`, Property-Based tests `test_*_properties.py`, all under `tests/`. Frontend tests use Vitest + fast-check: unit tests as `*.test.ts(x)`, Property-Based tests as `*.property.test.ts` under `frontend/src/__tests__/`. Cover new algorithms with both unit tests and property-based tests. Worker functions must be tested with pickle-safe arguments only (file paths and scalars, no numpy arrays or PIL Images).
+## Architecture & Robustness
+- Preserve layering: `core/` -> API/workers -> UI
+- Put reusable business logic in `core/`; routes do validation, session/file handling, and error translation; CPU-heavy work belongs in workers or `core/`
+- Keep preview/generation flows compatible with `SessionStore` and `FileRegistry`
+- Validate file types, LUT/mode compatibility, coordinates, required cache/session keys, and optional dependencies early with actionable errors
+- Never assume session/cache state exists or is fresh; return deterministic `4xx`/`5xx`, not raw tracebacks
+- Register every temp file for cleanup; preserve original state before destructive cache mutations; prevent stale preview/download caching
+- Use explicit timeouts, distinguish fatal vs non-fatal failures, and degrade optional features such as HEIC/HEIF gracefully
+- Current supported workflows include calibration, extraction/manual correction, LUT merge/inspection, preview/generation, batch conversion, printer/slicer integration, and BW/4-color/6-color/8-color/5-color-extended modes
 
-## Architecture Principles
-- **Layered separation**: Core → API → Workers → Frontend. Core has zero UI dependencies.
-- **Thread separation**: CPU-intensive tasks run in ProcessPoolExecutor via `api/workers/`. Worker functions accept only file paths and scalar parameters for pickle safety. Large results are written to temp files.
-- **Coordinator pattern**: `converter.py` orchestrates the image→3D pipeline, delegating to specialized modules (image processor, mesher, vector engine, heightmap loader, 3MF exporter).
-- **Strategy pattern**: `get_mesher()` selects between HighFidelityMesher and PixelArtMesher.
-- **Centralized config**: All constants and settings in `config.py` (PrinterConfig, ColorSystem, ModelingMode, BedManager, WorkerPoolConfig).
+## Tests
+- Backend: `pytest` + Hypothesis; Frontend: Vitest + fast-check
+- Add focused regression tests for new algorithms, bug fixes, cache/session/temp-file cleanup, timeout/fallback paths, invalid uploads/LUTs, and out-of-bounds/background clicks
 
-## Commit & Pull Request Guidelines
-Use Conventional Commits format: `<type>(<scope>): <subject>`. Types: feat / fix / docs / style / refactor / perf / test / chore. Scope matches module names (calibration, converter, extractor, lut, frontend, api, core). Examples:
-- `feat(calibration): add 8-color calibration board generator`
-- `fix(vector): resolve SVG path parsing edge case`
-- `perf(core): vectorize color matching using numpy broadcasting`
-
-## Security & Configuration
-Keep API tokens and printer credentials out of tracked configs. `user_settings.json` is runtime-generated and should not contain secrets. Worker pool size is configurable via environment variables. HEIC support requires optional `pillow-heif` dependency. Docker deployments expose port 7860 by default.
+## Hygiene & Commits
+- Do not commit secrets, machine-local config, IDE junk, generated caches, or transient artifacts
+- `user_settings.json` is optional runtime data; code must tolerate missing or partial values safely
+- Use Conventional Commits: `<type>(<scope>): <subject>`
+- When commit bodies or PR descriptions are needed, write English first and Chinese second
+- Summaries should explain why, not just touched files

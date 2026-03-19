@@ -23,7 +23,7 @@ import type {
 } from '@dnd-kit/core';
 import { useWidgetStore, WIDGET_REGISTRY, TAB_WIDGET_MAP } from '../../stores/widgetStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { computeSnap, computeStackPositions, computeDockBottomInset, WIDGET_WIDTH, COLLAPSED_HEIGHT, EXPANDED_HEIGHT, STACK_GAP } from '../../utils/widgetUtils';
+import { computeSnap, computeStackPositions, computeDockBottomInset, resolveWidgetHeight, WIDGET_WIDTH, COLLAPSED_HEIGHT, STACK_GAP, WIDGET_PANEL_RADIUS } from '../../utils/widgetUtils';
 import { WidgetPanel } from './WidgetPanel';
 import { SnapGuides } from './SnapGuides';
 import BasicSettingsWidgetContent from './BasicSettingsWidgetContent';
@@ -86,6 +86,7 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
   const isDragging = useWidgetStore((s) => s.isDragging);
   const activeWidgetId = useWidgetStore((s) => s.activeWidgetId);
   const activeTab = useWidgetStore((s) => s.activeTab);
+  const colorWorkstationCollapsed = useWidgetStore((s) => s.colorWorkstationCollapsed);
 
   // Always render converter widgets only; other tabs have their own
   // page-level rendering and do not use the widget dock system.
@@ -103,6 +104,7 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
   const leftDockRef = useRef<HTMLDivElement>(null);
   const rightDockRef = useRef<HTMLDivElement>(null);
   const colorWorkstationRef = useRef<HTMLDivElement>(null);
+  const measuredHeightsRef = useRef(new Map<WidgetId, number>());
   const dragPositionRef = useRef<{ x: number; y: number } | null>(null);
   const dragSourceRef = useRef<{ edge: 'left' | 'right'; scrollTop: number } | null>(null);
   const insertPreviewRef = useRef<InsertPreviewState | null>(null);
@@ -117,6 +119,24 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
+
+  const syncMeasuredHeights = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) {
+      measuredHeightsRef.current = new Map();
+      return;
+    }
+
+    const nextHeights = new Map<WidgetId, number>();
+    for (const id of TAB_WIDGET_MAP['converter']) {
+      const el = container.querySelector(`[data-widget-id="${id}"]`) as HTMLElement | null;
+      if (el) {
+        nextHeights.set(id, el.offsetHeight);
+      }
+    }
+
+    measuredHeightsRef.current = nextHeights;
+  }, []);
 
   // Responsive resize handler — clamp free widgets & recalculate stacks
   // Only processes widgets belonging to the current active tab to prevent
@@ -139,13 +159,7 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
       });
 
     // Measure actual DOM heights for expanded widgets
-    const measuredHeights = new Map<WidgetId, number>();
-    for (const id of currentTabIds) {
-      const el = container.querySelector(`[data-widget-id="${id}"]`) as HTMLElement | null;
-      if (el) {
-        measuredHeights.set(id, el.offsetHeight);
-      }
-    }
+    const measuredHeights = measuredHeightsRef.current;
 
     // Recalculate stack positions for snapped widgets in current tab only
     // Re-read state after potential snapToEdge calls
@@ -178,26 +192,37 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
       debounceTimer = setTimeout(() => recalculateStacks(), 50);
     };
 
-    const observer = new ResizeObserver(debouncedRecalc);
-
-    // Observe all widget elements in the container
-    const widgetEls = container.querySelectorAll('[data-widget-id]');
-    widgetEls.forEach((el) => observer.observe(el));
-
-    // Also observe newly added widgets via MutationObserver
-    const mutationObs = new MutationObserver(() => {
+    const observeWidgets = () => {
       observer.disconnect();
-      const els = container.querySelectorAll('[data-widget-id]');
-      els.forEach((el) => observer.observe(el));
+      syncMeasuredHeights();
+      const widgetEls = container.querySelectorAll('[data-widget-id]');
+      widgetEls.forEach((el) => observer.observe(el));
+    };
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const el = entry.target as HTMLElement;
+        const id = el.dataset.widgetId as WidgetId | undefined;
+        if (id) {
+          measuredHeightsRef.current.set(id, el.offsetHeight);
+        }
+      }
+      debouncedRecalc();
+    });
+
+    const mutationObs = new MutationObserver(() => {
+      observeWidgets();
+      debouncedRecalc();
     });
     mutationObs.observe(container, { childList: true, subtree: true });
+    observeWidgets();
 
     return () => {
       observer.disconnect();
       mutationObs.disconnect();
       if (debounceTimer) clearTimeout(debounceTimer);
     };
-  }, [recalculateStacks, activeTab]);
+  }, [recalculateStacks, activeTab, syncMeasuredHeights]);
 
   useEffect(() => {
     window.addEventListener('resize', recalculateStacks);
@@ -276,6 +301,8 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
 
     scheduleDockInsetUpdate();
     window.addEventListener('resize', scheduleDockInsetUpdate);
+    window.addEventListener('widget-animation-complete', scheduleDockInsetUpdate);
+    window.addEventListener('color-workstation-geometry-change', scheduleDockInsetUpdate);
 
     const observer = new ResizeObserver(scheduleDockInsetUpdate);
     if (containerRef.current) observer.observe(containerRef.current);
@@ -286,9 +313,11 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
         cancelAnimationFrame(frameId);
       }
       window.removeEventListener('resize', scheduleDockInsetUpdate);
+      window.removeEventListener('widget-animation-complete', scheduleDockInsetUpdate);
+      window.removeEventListener('color-workstation-geometry-change', scheduleDockInsetUpdate);
       observer.disconnect();
     };
-  }, [activeTab]);
+  }, [activeTab, colorWorkstationCollapsed]);
 
   const leftRegistry = activeRegistry.filter((config) => activeWidgetMap.get(config.id)?.snapEdge !== 'right');
   const rightRegistry = activeRegistry.filter((config) => activeWidgetMap.get(config.id)?.snapEdge === 'right');
@@ -299,7 +328,7 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
       .sort((a, b) => a.stackOrder - b.stackOrder);
     if (stackWidgets.length === 0) return 0;
     return stackWidgets.reduce(
-      (sum, w) => sum + (w.collapsed ? COLLAPSED_HEIGHT : (w.expandedHeight ?? EXPANDED_HEIGHT)) + STACK_GAP,
+      (sum, w) => sum + resolveWidgetHeight(w, measuredHeightsRef.current) + STACK_GAP,
       STACK_GAP
     );
   };
@@ -348,9 +377,7 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
       let accY = STACK_GAP;
 
       for (const sibling of siblings) {
-        const h = sibling.collapsed
-          ? COLLAPSED_HEIGHT
-          : (sibling.expandedHeight ?? EXPANDED_HEIGHT);
+        const h = resolveWidgetHeight(sibling, measuredHeightsRef.current);
         const midpoint = accY + h / 2;
 
         if (!inserted && contentDropY < midpoint) {
@@ -586,10 +613,10 @@ export function WidgetWorkspace({ children }: WidgetWorkspaceProps) {
           <DragOverlay>
             {activeWidgetId ? (
               <div
-                className="z-40 rounded-xl shadow-2xl border border-white/30 backdrop-blur-xl bg-white/50 dark:bg-gray-900/50 opacity-80"
-                style={{ width: WIDGET_WIDTH, height: COLLAPSED_HEIGHT }}
+                className="z-40 border border-slate-200/80 bg-slate-50/92 opacity-90 shadow-[var(--shadow-control)] dark:border-slate-700/80 dark:bg-slate-950/92"
+                style={{ width: WIDGET_WIDTH, height: COLLAPSED_HEIGHT, borderRadius: WIDGET_PANEL_RADIUS }}
               >
-                <div className="px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300">
+                <div className="px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300">
                   {t(WIDGET_REGISTRY.find((w) => w.id === activeWidgetId)?.titleKey ?? activeWidgetId)}
                 </div>
               </div>
