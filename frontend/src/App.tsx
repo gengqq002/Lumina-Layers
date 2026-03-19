@@ -255,9 +255,9 @@ function AppContent() {
         {activeTab === 'calibration' && <CalibrationPanel />}
 
         {activeTab === 'extractor' && (
-          <div className="flex h-full min-h-0">
+          <div className="flex h-full min-h-0 flex-col xl:flex-row">
             <ExtractorPanel />
-            <div className="relative min-h-0 flex-1 overflow-hidden border-l border-slate-200/70 dark:border-slate-800/80">
+            <div className="relative min-h-0 flex-1 overflow-hidden border-t border-slate-200/70 xl:border-l xl:border-t-0 dark:border-slate-800/80">
               <ExtractorCanvas />
             </div>
           </div>

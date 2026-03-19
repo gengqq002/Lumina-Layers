@@ -5,7 +5,16 @@ import { CalibrationColorMode, BackingColor } from "../api/types";
 import Dropdown from "./ui/Dropdown";
 import Slider from "./ui/Slider";
 import Button from "./ui/Button";
-import { PanelIntro, StatusBanner, centeredPanelClass, sectionCardClass } from "./ui/panelPrimitives";
+import {
+  PanelIntro,
+  StatusBanner,
+  centeredPanelClass,
+  sectionCardClass,
+  mutedSectionCardClass,
+  desktopSplitLayoutClass,
+  desktopPrimaryColumnClass,
+  desktopSecondaryColumnClass,
+} from "./ui/panelPrimitives";
 
 const colorModeOptions = Object.values(CalibrationColorMode).map((v) => ({
   label: v,
@@ -57,101 +66,112 @@ export default function CalibrationPanel() {
         description={t("cal_desc")}
       />
 
-      <section className={`${sectionCardClass} flex flex-col gap-4`}>
-        <div>
-          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50">{t("cal_params")}</h3>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t("cal_generate_btn")}</p>
+      <div className={desktopSplitLayoutClass}>
+        <div className={desktopPrimaryColumnClass}>
+          <section className={`${sectionCardClass} flex flex-col gap-4`}>
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50">{t("cal_params")}</h3>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t("cal_generate_btn")}</p>
+            </div>
+            <Dropdown
+              label={t("cal_color_mode_label")}
+              value={color_mode}
+              options={colorModeOptions}
+              onChange={(v) => setColorMode(v as CalibrationColorMode)}
+            />
+
+            <Slider
+              label={t("cal_block_size_label")}
+              value={block_size}
+              min={3}
+              max={10}
+              step={0.5}
+              unit="mm"
+              onChange={setBlockSize}
+              disabled={blockSizeDisabled}
+            />
+
+            <Slider
+              label={t("cal_gap_label")}
+              value={gap}
+              min={0.4}
+              max={2.0}
+              step={0.01}
+              unit="mm"
+              onChange={setGap}
+              disabled={gapDisabled}
+            />
+
+            <Dropdown
+              label={t("cal_backing_label")}
+              value={backing}
+              options={backingColorOptions}
+              onChange={(v) => setBacking(v as BackingColor)}
+              disabled={backingDisabled}
+            />
+
+            <Button
+              label={t("cal_generate_btn_panel")}
+              variant="primary"
+              onClick={() => void submitGenerate()}
+              disabled={isLoading}
+              loading={isLoading}
+              className="w-full"
+            />
+          </section>
         </div>
-        <Dropdown
-          label={t("cal_color_mode_label")}
-          value={color_mode}
-          options={colorModeOptions}
-          onChange={(v) => setColorMode(v as CalibrationColorMode)}
-        />
 
-        <Slider
-          label={t("cal_block_size_label")}
-          value={block_size}
-          min={3}
-          max={10}
-          step={0.5}
-          unit="mm"
-          onChange={setBlockSize}
-          disabled={blockSizeDisabled}
-        />
+        <div className={desktopSecondaryColumnClass}>
+          {statusMessage && (
+            <StatusBanner data-testid="status-message" tone="success">
+              {statusMessage}
+            </StatusBanner>
+          )}
 
-        <Slider
-          label={t("cal_gap_label")}
-          value={gap}
-          min={0.4}
-          max={2.0}
-          step={0.01}
-          unit="mm"
-          onChange={setGap}
-          disabled={gapDisabled}
-        />
+          {error && (
+            <StatusBanner data-testid="error-message" tone="error">
+              {error}
+            </StatusBanner>
+          )}
 
-        <Dropdown
-          label={t("cal_backing_label")}
-          value={backing}
-          options={backingColorOptions}
-          onChange={(v) => setBacking(v as BackingColor)}
-          disabled={backingDisabled}
-        />
+          {downloadUrl && (
+            <section className={`${sectionCardClass} flex items-center justify-between gap-3`}>
+              <div>
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50">{t("cal_download")}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t("cal_status")}</p>
+              </div>
+              <a
+                data-testid="download-link"
+                href={downloadUrl}
+                download
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-[0_12px_24px_rgba(37,99,235,0.22)] transition-colors hover:bg-blue-700"
+              >
+                {t("cal_download_3mf")}
+              </a>
+            </section>
+          )}
 
-        <Button
-          label={t("cal_generate_btn_panel")}
-          variant="primary"
-          onClick={() => void submitGenerate()}
-          disabled={isLoading}
-          loading={isLoading}
-          className="w-full"
-        />
-      </section>
-
-      {statusMessage && (
-        <StatusBanner data-testid="status-message" tone="success">
-          {statusMessage}
-        </StatusBanner>
-      )}
-
-      {error && (
-        <StatusBanner data-testid="error-message" tone="error">
-          {error}
-        </StatusBanner>
-      )}
-
-      {downloadUrl && (
-        <section className={`${sectionCardClass} flex items-center justify-between gap-3`}>
-          <div>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50">{t("cal_download")}</h3>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t("cal_status")}</p>
-          </div>
-          <a
-            data-testid="download-link"
-            href={downloadUrl}
-            download
-            className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-[0_12px_24px_rgba(37,99,235,0.22)] transition-colors hover:bg-blue-700"
-          >
-            {t("cal_download_3mf")}
-          </a>
-        </section>
-      )}
-
-      {previewImageUrl && (
-        <section className={`${sectionCardClass} flex flex-col gap-4`}>
-          <div>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50">{t("cal_preview")}</h3>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t("cal_preview_alt")}</p>
-          </div>
-          <img
-            data-testid="preview-image"
-            src={previewImageUrl}
-            alt={t("cal_preview_alt")}
-            className="w-full rounded-[24px] border border-slate-200/80 object-cover shadow-[var(--shadow-control)] dark:border-slate-700/80"
-          />
-        </section>
-      )}
+          <section className={`${sectionCardClass} flex flex-col gap-4`}>
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50">{t("cal_preview")}</h3>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t("cal_preview_alt")}</p>
+            </div>
+            {previewImageUrl ? (
+              <img
+                data-testid="preview-image"
+                src={previewImageUrl}
+                alt={t("cal_preview_alt")}
+                className="w-full rounded-[24px] border border-slate-200/80 object-cover shadow-[var(--shadow-control)] dark:border-slate-700/80"
+              />
+            ) : (
+              <div className={`${mutedSectionCardClass} flex min-h-[280px] flex-col justify-center gap-3`}>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t("cal_status")}</p>
+                <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">{t("cal_desc")}</p>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
     </motion.aside>
   );
 }

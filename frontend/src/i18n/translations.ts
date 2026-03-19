@@ -440,16 +440,16 @@ export const translations: Record<string, Record<"zh" | "en", string>> = {
 
   // ==================== Calibration Tab ====================
   cal_title: {
-    zh: "### 第二步：生成校准板",
-    en: "### Step 2: Generate Calibration Board",
+    zh: "生成校准板",
+    en: "Generate Calibration Board",
   },
   cal_desc: {
     zh: "生成1024种颜色的校准板，打印后用于提取打印机的实际色彩数据。",
     en: "Generate a 1024-color calibration board to extract your printer's actual color data.",
   },
   cal_params: {
-    zh: "#### ⚙️ 参数",
-    en: "#### ⚙️ Parameters",
+    zh: "参数",
+    en: "Parameters",
   },
   cal_color_mode: {
     zh: "色彩模式",
@@ -476,8 +476,8 @@ export const translations: Record<string, Record<"zh" | "en", string>> = {
     en: "Status",
   },
   cal_preview: {
-    zh: "#### 👁️ 预览",
-    en: "#### 👁️ Preview",
+    zh: "预览",
+    en: "Preview",
   },
   cal_download: {
     zh: "下载 3MF",
@@ -486,8 +486,8 @@ export const translations: Record<string, Record<"zh" | "en", string>> = {
 
   // ==================== Color Extractor Tab ====================
   ext_title: {
-    zh: "### 第三步：提取颜色数据",
-    en: "### Step 3: Extract Color Data",
+    zh: "提取颜色数据",
+    en: "Extract Color Data",
   },
   ext_desc: {
     zh: "拍摄打印好的校准板照片，提取真实的色彩数据生成 LUT 文件。",
@@ -514,8 +514,8 @@ export const translations: Record<string, Record<"zh" | "en", string>> = {
     en: "🗑️ Reset",
   },
   ext_correction_section: {
-    zh: "#### 🔧 校正参数",
-    en: "#### 🔧 Correction",
+    zh: "校正参数",
+    en: "Correction",
   },
   ext_wb: {
     zh: "自动白平衡",

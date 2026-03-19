@@ -17,6 +17,15 @@ export const sectionCardClass =
 export const mutedSectionCardClass =
   "panel-section-muted rounded-2xl px-4 py-3";
 
+export const desktopSplitLayoutClass =
+  "grid min-h-0 gap-6 xl:grid-cols-[minmax(360px,440px)_minmax(0,1fr)] xl:items-start";
+
+export const desktopPrimaryColumnClass =
+  "flex min-w-0 flex-col gap-5";
+
+export const desktopSecondaryColumnClass =
+  "flex min-w-0 flex-col gap-5";
+
 interface PanelIntroProps {
   title: string;
   description?: string;
