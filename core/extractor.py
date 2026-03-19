@@ -7,8 +7,6 @@ Extracts color data from printed calibration boards.
 import os
 import numpy as np
 import cv2
-import gradio as gr
-
 from config import (
     ColorSystem,
     PHYSICAL_GRID_SIZE,
@@ -383,8 +381,22 @@ def run_extraction(img, points, offset_x, offset_y, zoom, barrel, wb, bright, co
     return vis, prev, LUT_FILE_PATH, f"[OK] 提取完成！({grid_size}x{grid_size}, {total_cells}色) LUT已保存"
 
 
-def probe_lut_cell(lut_path, evt: gr.SelectData):
-    """Probe a specific cell in the LUT for manual inspection."""
+def probe_lut_cell(
+    lut_path: str | None,
+    click_coords: tuple[int, int],
+) -> tuple[str, str | None, tuple[int, int] | None]:
+    """Probe a specific cell in the LUT for manual inspection.
+    探测 LUT 中指定单元格的颜色信息，用于手动检查。
+
+    Args:
+        lut_path (str | None): Path to the LUT file. (LUT 文件路径)
+        click_coords (tuple[int, int]): (x, y) pixel coordinates of the click. (点击的像素坐标)
+
+    Returns:
+        tuple[str, str | None, tuple[int, int] | None]:
+            HTML info string, hex color string, and (row, col) grid coordinates.
+            (HTML 信息字符串、十六进制颜色字符串、网格坐标)
+    """
     actual_path = LUT_FILE_PATH
     if isinstance(lut_path, str) and lut_path:
         actual_path = lut_path
@@ -410,7 +422,7 @@ def probe_lut_cell(lut_path, evt: gr.SelectData):
     lut_width = side
     lut_height = side
 
-    x, y = evt.index
+    x, y = click_coords
     scale = 512 / lut_width  # 使用实际宽度计算缩放比例
     c = min(max(int(x / scale), 0), lut_width - 1)
     r = min(max(int(y / scale), 0), lut_height - 1)

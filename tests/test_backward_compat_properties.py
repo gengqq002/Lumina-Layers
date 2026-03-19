@@ -238,9 +238,8 @@ def _count_function_body_lines(node: ast.FunctionDef) -> int:
     return last_line - first_line + 1
 
 
-# converter.py 中的 Gradio UI 函数（不受 20 行限制）
+# converter.py 中的 UI 辅助函数（不受 20 行限制）
 _GRADIO_UI_FUNCTIONS = {
-    "on_preview_click",
     "update_preview_with_loop",
     "on_remove_loop",
     "generate_final_model",

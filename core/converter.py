@@ -1,13 +1,12 @@
 """
 Lumina Studio - Image Converter Coordinator (Refactored)
 
-Thin wrapper layer + re-exports + Gradio UI functions.
-薄包装层 + re-export + Gradio UI 函数。
+Thin wrapper layer + re-exports for backward compatibility.
+薄包装层 + re-export，保持向后兼容。
 
 converter.py 从 4500+ 行的巨型文件重构为：
 1. convert_image_to_3d / generate_preview_cached 薄包装（委托给 coordinator）
 2. re-export 所有被外部引用的函数（保持 from core.converter import XXX 兼容）
-3. Gradio UI 函数保留不动
 """
 
 import os
@@ -17,7 +16,6 @@ import numpy as np
 import cv2
 import trimesh
 from PIL import Image, ImageDraw, ImageFont
-import gradio as gr
 from typing import List, Dict, Tuple, Optional
 
 from config import PrinterConfig, ColorSystem, ModelingMode, PREVIEW_SCALE, PREVIEW_MARGIN, OUTPUT_DIR, BedManager
@@ -173,64 +171,7 @@ def generate_preview_cached(image_path, lut_path, target_width_mm,
     return ctx.get('display_image'), ctx.get('cache'), ctx.get('status_msg', '[OK]')
 
 
-# ========== Gradio UI Functions (Unchanged) ==========
-
-
-def on_preview_click(cache, loop_pos, evt: gr.SelectData, bed_label=None):
-    """Handle preview image click event."""
-    if evt is None or cache is None:
-        return loop_pos, False, "Invalid click - please generate preview first"
-    
-    if bed_label is None:
-        bed_label = BedManager.DEFAULT_BED
-
-    click_x, click_y = evt.index
-    
-    target_w = cache['target_w']
-    target_h = cache['target_h']
-    target_width_mm = cache.get('target_width_mm')
-    
-    bed_w_mm, bed_h_mm = BedManager.get_bed_size(bed_label)
-    ppm = BedManager.compute_scale(bed_w_mm, bed_h_mm)
-    margin = int(30 * ppm / 3)
-
-    canvas_w = int(bed_w_mm * ppm) + margin
-    canvas_h = int(bed_h_mm * ppm) + margin
-
-    # Use target_width_mm from cache for accurate physical size
-    if target_width_mm is not None and target_width_mm > 0:
-        model_w_mm = target_width_mm
-        model_h_mm = target_width_mm * target_h / target_w
-    else:
-        model_w_mm = target_w * PrinterConfig.NOZZLE_WIDTH
-        model_h_mm = target_h * PrinterConfig.NOZZLE_WIDTH
-    new_w = max(1, int(model_w_mm * ppm))
-    new_h = max(1, int(model_h_mm * ppm))
-
-    offset_x = margin + (int(bed_w_mm * ppm) - new_w) // 2
-    offset_y = (int(bed_h_mm * ppm) - new_h) // 2
-
-    # Gradio may scale the displayed image
-    gradio_display_height = 600
-    gradio_display_width = 900
-    scale_by_height = gradio_display_height / canvas_h
-    scale_by_width = gradio_display_width / canvas_w
-    gradio_scale = min(1.0, scale_by_height, scale_by_width)
-    
-    canvas_click_x = click_x / gradio_scale
-    canvas_click_y = click_y / gradio_scale
-    
-    # Convert from canvas coords to original image pixel coords
-    # Each pixel in original image = (model_w_mm / target_w) mm
-    mm_per_px = model_w_mm / target_w
-    img_click_x = (canvas_click_x - offset_x) / (mm_per_px * ppm)
-    img_click_y = (canvas_click_y - offset_y) / (mm_per_px * ppm)
-    
-    orig_x = max(0, min(target_w - 1, img_click_x))
-    orig_y = max(0, min(target_h - 1, img_click_y))
-    
-    pos_info = f"Position: ({orig_x:.1f}, {orig_y:.1f}) px"
-    return (orig_x, orig_y), True, pos_info
+# ========== Preview Helper Functions ==========
 
 
 def update_preview_with_loop(cache, loop_pos, add_loop,
@@ -485,14 +426,9 @@ def update_preview_with_replacements(cache, replacement_regions=None,
                 auto_pairs.append({"quantized_hex": qh, "matched_hex": mh})
 
     # Generate palette HTML for display
-    from ui.palette_extension import generate_palette_html
-    palette_html = generate_palette_html(
-        color_palette,
-        replacements={},
-        lang=lang,
-        replacement_regions=replacement_regions or [],
-        auto_pairs=auto_pairs,
-    )
+    # NOTE: palette HTML generation was previously delegated to ui.palette_extension
+    # (Gradio-only). Now returns empty string; React frontend renders palette via API.
+    palette_html = ""
     
     return display, updated_cache, palette_html
 
@@ -651,31 +587,40 @@ def clear_highlight_preview(cache, loop_pos=None, add_loop=False,
     return display, "[OK] 预览已恢复 | Preview restored"
 
 
-# [新增] 预览图点击吸取颜色并高亮
-def on_preview_click_select_color(cache, evt: gr.SelectData, bed_label=None):
-    """
-    预览图点击事件处理：吸取颜色并高亮显示
-    1. 识别点击位置的颜色
-    2. 生成该颜色的高亮预览图
-    3. 返回颜色信息给 UI
+def on_preview_click_select_color(
+    cache: dict,
+    click_coords: tuple[int, int],
+    bed_label: str | None = None,
+) -> tuple[np.ndarray | None, str, str | None, str]:
+    """Handle preview click: pick color and generate highlight.
+    预览图点击事件处理：吸取颜色并高亮显示。
+
+    Args:
+        cache (dict): Preview cache data. (预览缓存数据)
+        click_coords (tuple[int, int]): Click coordinates (x, y). (点击坐标)
+        bed_label (str | None): Printer bed label. (打印床标签)
+
+    Returns:
+        tuple: (display_image, display_text, quantized_hex, status_message)
+            (显示图像, 显示文本, 量化色 hex, 状态消息)
     """
     if cache is None:
         return None, "未选择", None, "[ERROR] 请先生成预览"
 
-    if evt is None or evt.index is None:
-        return gr.update(), "未选择", None, "[WARNING] 无效点击"
+    if click_coords is None:
+        return None, "未选择", None, "[WARNING] 无效点击"
 
     if bed_label is None:
         bed_label = cache.get('bed_label', BedManager.DEFAULT_BED)
 
-    display_click_x, display_click_y = evt.index
+    display_click_x, display_click_y = click_coords
 
     target_w = cache.get('target_w')
     target_h = cache.get('target_h')
     target_width_mm = cache.get('target_width_mm')
 
     if target_w is None or target_h is None:
-        return gr.update(), "未选择", None, "[ERROR] 缓存数据不完整"
+        return None, "未选择", None, "[ERROR] 缓存数据不完整"
 
     bed_w_mm, bed_h_mm = BedManager.get_bed_size(bed_label)
     ppm = BedManager.compute_scale(bed_w_mm, bed_h_mm)
@@ -698,10 +643,10 @@ def on_preview_click_select_color(cache, evt: gr.SelectData, bed_label=None):
     offset_y = (int(bed_h_mm * ppm) - new_h) // 2
 
     # _scale_preview_image fits canvas into 1200x750 box
-    gradio_scale = min(1.0, 1200 / canvas_w, 750 / canvas_h)
+    display_scale = min(1.0, 1200 / canvas_w, 750 / canvas_h)
 
-    canvas_click_x = display_click_x / gradio_scale
-    canvas_click_y = display_click_y / gradio_scale
+    canvas_click_x = display_click_x / display_scale
+    canvas_click_y = display_click_y / display_scale
 
     # Convert canvas coords -> original image pixel coords
     mm_per_px = model_w_mm / target_w
@@ -725,10 +670,10 @@ def on_preview_click_select_color(cache, evt: gr.SelectData, bed_label=None):
     h, w = matched_rgb.shape[:2]
 
     if not (0 <= orig_x < w and 0 <= orig_y < h):
-        return gr.update(), "未选择", None, f"[WARNING] 点击了无效区域 ({orig_x}, {orig_y})"
+        return None, "未选择", None, f"[WARNING] 点击了无效区域 ({orig_x}, {orig_y})"
 
     if not mask_solid[orig_y, orig_x]:
-        return gr.update(), "未选择", None, "[WARNING] 点击了背景区域"
+        return None, "未选择", None, "[WARNING] 点击了背景区域"
 
     q_rgb = tuple(int(v) for v in quantized_image[orig_y, orig_x])
     m_rgb = tuple(int(v) for v in matched_rgb[orig_y, orig_x])
@@ -750,7 +695,7 @@ def on_preview_click_select_color(cache, evt: gr.SelectData, bed_label=None):
 
     display_text = f"量化色 {q_hex} | 原配准色 {m_hex}"
     if display_img is None:
-        return gr.update(), display_text, q_hex, status_msg
+        return None, display_text, q_hex, status_msg
 
     return display_img, display_text, q_hex, status_msg
 
@@ -790,7 +735,10 @@ def generate_lut_grid_html(lut_path, lang: str = "zh"):
             return 'purple'
         return 'neutral'
 
-    from ui.palette_extension import build_search_bar_html, build_hue_filter_bar_html
+    # NOTE: search/hue-filter HTML was previously from ui.palette_extension (Gradio-only).
+    # React frontend renders its own search/filter UI via API.
+    _search_bar_html = ""
+    _hue_filter_html = ""
 
     # Derive LUT key for favorites persistence
     _lut_key = os.path.splitext(os.path.basename(lut_path))[0] if lut_path else ''
@@ -800,8 +748,8 @@ def generate_lut_grid_html(lut_path, lang: str = "zh"):
         <div style="margin-bottom: 8px; font-size: 12px; color: #666;">
             {I18n.get('lut_grid_count', lang).format(count=count)}: <span id="lut-color-visible-count">{count}</span>
         </div>
-        {build_search_bar_html(lang)}
-        {build_hue_filter_bar_html(lang)}
+        {_search_bar_html}
+        {_hue_filter_html}
         <div id="lut-color-grid-container" data-lut-key="{_lut_key}" style="
             display: flex;
             flex-wrap: wrap;
@@ -902,12 +850,10 @@ def generate_lut_card_grid_html(lut_path, lang: str = "zh"):
     cell = 18
     gap = 1
 
-    from ui.palette_extension import build_search_bar_html, build_hue_filter_bar_html
-
+    # NOTE: search/hue-filter HTML was previously from ui.palette_extension (Gradio-only).
+    # React frontend renders its own search/filter UI via API.
     html_parts = [
         f'<div style="margin-bottom:8px; font-size:12px; color:#666;">{I18n.get("lut_grid_count", lang).format(count=total)}: <span id="lut-color-visible-count">{total}</span></div>',
-        build_search_bar_html(lang),
-        build_hue_filter_bar_html(lang),
     ]
 
     # Derive LUT key for favorites persistence
@@ -1072,31 +1018,30 @@ def detect_lut_color_mode(lut_path):
         return None
 
 
-def detect_image_type(image_path):
-    """
-    Detect image type and return recommended modeling mode.
+def detect_image_type(image_path: str | None) -> str | None:
+    """Detect image type and return recommended modeling mode.
     自动检测图像类型并返回推荐的建模模式。
 
     Args:
-        image_path (str): Image file path. (图像文件路径)
+        image_path (str | None): Image file path. (图像文件路径)
 
     Returns:
-        gr.update: Gradio update object with new mode, or no-op update. (Gradio 更新对象)
+        str | None: Modeling mode string if change recommended, None otherwise.
+            (推荐的建模模式字符串，无需变更时返回 None)
     """
-    import gradio as gr
     if not image_path:
-        return gr.update()
-    
+        return None
+
     try:
         ext = os.path.splitext(image_path)[1].lower()
-        
+
         if ext == '.svg':
             print(f"[AUTO_DETECT] SVG file detected, recommending SVG Mode")
-            return gr.update(value=ModelingMode.VECTOR)
+            return ModelingMode.VECTOR
         else:
             print(f"[AUTO_DETECT] Raster image detected ({ext}), keeping current mode")
-            return gr.update()  # 不改变当前选择
-            
+            return None
+
     except Exception as e:
         print(f"[AUTO_DETECT] Error detecting image type: {e}")
         return None

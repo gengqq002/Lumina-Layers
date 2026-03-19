@@ -303,8 +303,8 @@ def extract_lut_available_colors(lut_path: str) -> List[dict]:
 
 def get_lut_color_choices(lut_path: str) -> List[tuple]:
     """
-    Get LUT colors formatted for Gradio Dropdown.
-    获取格式化为 Gradio 下拉菜单的 LUT 颜色列表。
+    Get LUT colors formatted for dropdown selection.
+    获取格式化为下拉菜单的 LUT 颜色列表。
 
     Args:
         lut_path: Path to the LUT .npy file
@@ -349,10 +349,12 @@ def generate_lut_color_dropdown_html(lut_path: str, selected_color: str = None, 
     Returns:
         HTML string showing available colors as a clickable grid
     """
-    from ui.palette_extension import generate_lut_color_grid_html
+    # NOTE: HTML generation was previously delegated to ui.palette_extension (Gradio-only).
+    # React frontend renders its own color grid UI via API.
     colors = extract_lut_available_colors(lut_path)
-    # Delegate HTML generation to palette_extension (non-invasive)
-    return generate_lut_color_grid_html(colors, selected_color, used_colors)
+    if not colors:
+        return ""
+    return ""
 
 
 def detect_lut_color_mode(lut_path):
@@ -483,30 +485,29 @@ def detect_lut_color_mode(lut_path):
 # ========== 检测工具函数 (Detection Utility Functions) ==========
 
 
-def detect_image_type(image_path):
-    """
-    Detect image type and return recommended modeling mode.
+def detect_image_type(image_path: str | None) -> str | None:
+    """Detect image type and return recommended modeling mode.
     自动检测图像类型并返回推荐的建模模式。
 
     Args:
-        image_path (str): Image file path. (图像文件路径)
+        image_path (str | None): Image file path. (图像文件路径)
 
     Returns:
-        gr.update: Gradio update object with new mode, or no-op update. (Gradio 更新对象)
+        str | None: Modeling mode string if change recommended, None otherwise.
+            (推荐的建模模式字符串，无需变更时返回 None)
     """
-    import gradio as gr
     if not image_path:
-        return gr.update()
+        return None
 
     try:
         ext = os.path.splitext(image_path)[1].lower()
 
         if ext == '.svg':
             print(f"[AUTO_DETECT] SVG file detected, recommending SVG Mode")
-            return gr.update(value=ModelingMode.VECTOR)
+            return ModelingMode.VECTOR
         else:
             print(f"[AUTO_DETECT] Raster image detected ({ext}), keeping current mode")
-            return gr.update()  # 不改变当前选择
+            return None
 
     except Exception as e:
         print(f"[AUTO_DETECT] Error detecting image type: {e}")
@@ -584,7 +585,10 @@ def generate_lut_grid_html(lut_path, lang: str = "zh"):
             return 'purple'
         return 'neutral'
 
-    from ui.palette_extension import build_search_bar_html, build_hue_filter_bar_html
+    # NOTE: search/hue-filter HTML was previously from ui.palette_extension (Gradio-only).
+    # React frontend renders its own search/filter UI via API.
+    _search_bar_html = ""
+    _hue_filter_html = ""
 
     # Derive LUT key for favorites persistence
     _lut_key = os.path.splitext(os.path.basename(lut_path))[0] if lut_path else ''
@@ -594,8 +598,8 @@ def generate_lut_grid_html(lut_path, lang: str = "zh"):
         <div style="margin-bottom: 8px; font-size: 12px; color: #666;">
             {I18n.get('lut_grid_count', lang).format(count=count)}: <span id="lut-color-visible-count">{count}</span>
         </div>
-        {build_search_bar_html(lang)}
-        {build_hue_filter_bar_html(lang)}
+        {_search_bar_html}
+        {_hue_filter_html}
         <div id="lut-color-grid-container" data-lut-key="{_lut_key}" style="
             display: flex;
             flex-wrap: wrap;
@@ -703,12 +707,10 @@ def generate_lut_card_grid_html(lut_path, lang: str = "zh"):
     cell = 18
     gap = 1
 
-    from ui.palette_extension import build_search_bar_html, build_hue_filter_bar_html
-
+    # NOTE: search/hue-filter HTML was previously from ui.palette_extension (Gradio-only).
+    # React frontend renders its own search/filter UI via API.
     html_parts = [
         f'<div style="margin-bottom:8px; font-size:12px; color:#666;">{I18n.get("lut_grid_count", lang).format(count=total)}: <span id="lut-color-visible-count">{total}</span></div>',
-        build_search_bar_html(lang),
-        build_hue_filter_bar_html(lang),
     ]
 
     # Derive LUT key for favorites persistence
@@ -865,7 +867,7 @@ def _resolve_click_selection_hexes(cache, default_hex):
     cached_q_hex = (cache or {}).get('selected_quantized_hex')
     cached_m_hex = (cache or {}).get('selected_matched_hex')
 
-    # Gradio update objects are dict-like; they must not propagate into hex state.
+    # Non-string values (e.g. None) must not propagate into hex state.
     fallback_hex = default_hex if isinstance(default_hex, str) else None
     q_hex = cached_q_hex if isinstance(cached_q_hex, str) else fallback_hex
     m_hex = cached_m_hex if isinstance(cached_m_hex, str) else q_hex
