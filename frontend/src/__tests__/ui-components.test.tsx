@@ -57,6 +57,15 @@ describe("Slider", () => {
     const input = screen.getByRole("textbox", { name: /width value/i });
     expect(input).toHaveValue("50");
   });
+
+  it("keeps enough width for three-digit values in the text input", () => {
+    render(
+      <Slider label="Width" value={120} min={10} max={400} step={1} onChange={() => {}} unit="mm" />,
+    );
+    const input = screen.getByRole("textbox", { name: /width value/i });
+    expect(input).toHaveValue("120");
+    expect(input).toHaveStyle({ width: "7ch", minWidth: "7ch" });
+  });
 });
 
 describe("ImageUpload", () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { cx } from "./panelPrimitives";
 
 interface SliderProps {
@@ -73,12 +73,19 @@ export default function Slider({
   };
 
   // 计算输入框宽度：根据 max 值的字符数 + unit
-  const maxChars = Math.max(
+  const formattedCurrentValue = useMemo(
+    () => formatValue(value, step, displayDecimals),
+    [value, step, displayDecimals],
+  );
+
+  const inputChars = Math.max(
     formatValue(max, step, displayDecimals).length,
     formatValue(min, step, displayDecimals).length,
-    4,
+    formattedCurrentValue.length,
+    inputText.length,
+    minInputWidthCh ?? 6,
   );
-  const inputWidth = `${Math.max(maxChars + 1, minInputWidthCh ?? 0)}ch`;
+  const inputWidth = `${inputChars + 1}ch`;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -112,8 +119,8 @@ export default function Slider({
             onFocus={() => setIsFocused(true)}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
-            style={{ width: inputWidth }}
-            className="rounded-xl border border-slate-200/80 bg-white/90 px-2 py-1 text-right text-xs tabular-nums text-slate-700 shadow-[var(--shadow-control)] focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-700/80 dark:bg-slate-900 dark:text-slate-100"
+            style={{ width: inputWidth, minWidth: inputWidth }}
+            className="rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1 text-center text-sm tabular-nums text-slate-700 shadow-[var(--shadow-control)] focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-700/80 dark:bg-slate-900 dark:text-slate-100"
             aria-label={`${label} value`}
           />
           {unit && (

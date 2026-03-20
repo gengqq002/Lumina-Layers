@@ -3,7 +3,7 @@ import type { PaletteEntry } from "../../api/types";
 import Slider from "../ui/Slider";
 import Button from "../ui/Button";
 import { useI18n } from "../../i18n/context";
-import { cx, mutedSectionCardClass, sectionCardClass } from "../ui/panelPrimitives";
+import { cx, workstationInsetCardClass, workstationPanelCardClass } from "../ui/panelPrimitives";
 
 // ========== PaletteItem ==========
 
@@ -154,7 +154,7 @@ interface SelectedColorDetailProps {
 function SelectedColorDetail({ entry, remappedHex }: SelectedColorDetailProps) {
   const { t } = useI18n();
   return (
-    <div className={cx(mutedSectionCardClass, "mb-1 flex items-start gap-4 px-4 py-3")}>
+    <div className={cx(workstationInsetCardClass, "mb-1 flex items-start gap-4")}>
       <ColorBlock label={t("palette_quantized")} hex={entry.quantized_hex} />
       <ColorBlock label={t("palette_matched")} hex={entry.matched_hex} />
       {remappedHex && <ColorBlock label={t("palette_replaced_label")} hex={remappedHex} />}
@@ -168,7 +168,7 @@ function FreeColorSummary({ freeColors }: { freeColors: Set<string> }) {
   const { t } = useI18n();
   if (freeColors.size === 0) return null;
   return (
-    <div className={cx(mutedSectionCardClass, "flex flex-wrap items-center gap-2 px-3 py-2.5")}>
+    <div className={cx(workstationInsetCardClass, "flex flex-wrap items-center gap-2 px-3 py-2.5")}>
       <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{t("conv_free_color_label")}:</span>
       {Array.from(freeColors).sort().map(hex => (
         <span
@@ -239,7 +239,7 @@ export default function PalettePanel() {
   };
 
   return (
-    <div className={cx(sectionCardClass, "h-full rounded-[26px] px-4 py-4")}>
+    <div className={workstationPanelCardClass}>
       {palette.length === 0 ? (
         <p className="py-4 text-sm text-slate-500 dark:text-slate-400">
           {t("palette_no_data")}

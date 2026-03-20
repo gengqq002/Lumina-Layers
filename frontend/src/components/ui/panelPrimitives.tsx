@@ -17,6 +17,15 @@ export const sectionCardClass =
 export const mutedSectionCardClass =
   "panel-section-muted rounded-2xl px-4 py-3";
 
+export const workstationPanelCardClass =
+  "panel-section-muted h-full rounded-[28px] px-4 py-4";
+
+export const workstationInsetCardClass =
+  "panel-section-muted rounded-[22px] px-4 py-3";
+
+export const workstationShellClass =
+  "rounded-t-[28px]";
+
 export const desktopSplitLayoutClass =
   "grid min-h-0 gap-6 xl:grid-cols-[minmax(360px,440px)_minmax(0,1fr)] xl:items-start";
 

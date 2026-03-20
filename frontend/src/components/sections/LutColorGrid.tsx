@@ -5,7 +5,7 @@ import { hexToRgb, sortByColorDistance } from "../../utils/colorUtils";
 import { isCardModeAvailable } from "../../utils/cardUtils";
 import type { LutColorEntry } from "../../api/types";
 import { useI18n } from "../../i18n/context";
-import { cx, mutedSectionCardClass, sectionCardClass } from "../ui/panelPrimitives";
+import { cx, workstationInsetCardClass, workstationPanelCardClass } from "../ui/panelPrimitives";
 
 export type HueCategory =
   | "all"
@@ -195,7 +195,7 @@ export default function LutColorGrid() {
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{title}</p>
         )}
         <div
-          className="rounded-[20px] border border-slate-200/80 bg-white/55 p-2 shadow-[var(--shadow-control)] dark:border-slate-700/80 dark:bg-slate-900/60"
+          className="rounded-[22px] border border-slate-200/80 bg-white/55 p-2 shadow-[var(--shadow-control)] dark:border-slate-700/80 dark:bg-slate-900/60"
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${cols}, 18px)`,
@@ -214,7 +214,7 @@ export default function LutColorGrid() {
                 type="button"
                 title={`${c.hex} · RGB(${r}, ${g}, ${b})`}
                 onClick={() => onColorClick(c.hex)}
-                className={`cursor-pointer rounded-[4px] border transition-colors ${
+                className={`cursor-pointer rounded-[8px] border transition-colors ${
                   isTarget
                     ? "border-amber-500 ring-1 ring-amber-500"
                     : "border-transparent hover:border-slate-400"
@@ -385,7 +385,7 @@ export default function LutColorGrid() {
   return (
     <div className="relative">
       {replacePreviewLoading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[24px] bg-slate-950/40">
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[28px] bg-slate-950/40">
           <p className="text-xs text-slate-100">{t("lut_grid_loading")}</p>
         </div>
       )}
@@ -394,10 +394,10 @@ export default function LutColorGrid() {
       ) : lutColors.length === 0 ? (
         <p className="py-4 text-sm text-slate-500 dark:text-slate-400">{t("lut_grid_select_lut")}</p>
       ) : (
-        <div className={cx(sectionCardClass, "flex h-full flex-col gap-3 rounded-[26px] px-4 py-4")}>
+        <div className={cx(workstationPanelCardClass, "flex flex-col gap-3")}>
           {/* Confirmation preview bar */}
           {pendingReplacement && (
-            <div className={cx(mutedSectionCardClass, "flex items-center gap-1.5 px-3 py-2")}>
+            <div className={cx(workstationInsetCardClass, "flex items-center gap-1.5 px-3 py-2")}>
               {/* Source color swatch(es) */}
               <div className="flex items-center gap-0.5">
                 {pendingReplacement.mode === 'multi-select' && pendingReplacement.sourceColors ? (
@@ -454,7 +454,7 @@ export default function LutColorGrid() {
               <>
                 {" · 已选中 "}
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-sm border border-slate-400/80 align-middle dark:border-slate-500/80"
+                  className="inline-block h-2.5 w-2.5 rounded-md border border-slate-400/80 align-middle dark:border-slate-500/80"
                   style={{ backgroundColor: `#${selectedColor}` }}
                 />
                 <span className="font-mono text-[10px]"> #{selectedColor}</span>

@@ -15,7 +15,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useI18n } from '../../i18n/context';
 import PalettePanel from '../sections/PalettePanel';
 import LutColorGrid from '../sections/LutColorGrid';
-import { cx } from '../ui/panelPrimitives';
+import { cx, workstationShellClass } from '../ui/panelPrimitives';
 
 /** Title bar height in pixels. (标题栏高度) */
 export const COLOR_WORKSTATION_TITLE_BAR_HEIGHT = 32;
@@ -58,6 +58,7 @@ const ColorWorkstation = forwardRef<HTMLDivElement>(function ColorWorkstation(_,
         overflow: 'hidden',
       }}
       className={cx(
+        workstationShellClass,
         "border-x border-t border-slate-200/80 dark:border-slate-800/80",
         "bg-slate-50/98 shadow-[var(--shadow-panel-top)] dark:bg-slate-950/98",
         enableBlur && "backdrop-blur-[2px]"
